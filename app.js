@@ -1,4 +1,4 @@
-/* Storyboard App — full JS (with Present ▾ / Play movie)
+/* Storyboard App — full JS (Present ▾ + Play movie + timeline + fixes)
    - Multi‑project (IndexedDB) + scrollable Project Picker
    - Comic / Board / Presentation
    - Editor (lens, type, moves, transition, dialogue, notes) + voice notes
@@ -7,7 +7,8 @@
    - Export MP4 (ffmpeg.wasm via CDN) with full audio mix, progress UI + toasts
    - WebM fallback with progress
    - iPhone-friendly presentation/video
-   - NEW: Present ▾ dropdown (Manual Present + Auto “Play movie”)
+   - Present ▾ dropdown (Manual Present + Auto “Play movie”)
+   - NEW: Present button fixes; auto mode fullscreen + hidden arrows + timeline + full-frame video
 */
 
 (()=>{
@@ -33,6 +34,9 @@ function downloadBlob(data, filename, type){
 }
 function longPress(el, ms, cb){ let t=null; on(el,"touchstart",()=>{ t=setTimeout(cb,ms); },{passive:true}); on(el,"touchend",()=>clearTimeout(t),{passive:true}); on(el,"touchmove",()=>clearTimeout(t),{passive:true}); on(el,"mousedown",()=>{ t=setTimeout(cb,ms); }); on(el,"mouseup",()=>clearTimeout(t)); on(el,"mouseleave",()=>clearTimeout(t)); }
 function formatTime(s){ s=Math.round(s); const m=Math.floor(s/60), r=s%60; return `${m}:${String(r).padStart(2,"0")}`; }
+function importScript(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=()=>res(); s.onerror=rej; document.head.appendChild(s); }); }
+function strToUint8(s){ return new TextEncoder().encode(s); }
+function dataURLtoUint8(dataUrl){ const [,b64]=dataUrl.split(','); const bin=atob(b64); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return bytes; }
 
 // =========================
 // Toasts + Progress modal
@@ -135,7 +139,7 @@ const boardView      = $("#boardView");
 const dropzone       = $("#dropzone");
 const gallery        = $("#gallery");
 
-/* NEW: Present ▾ dropdown elements */
+/* Present ▾ dropdown elements */
 const playToggle   = $("#playToggle");
 const playMenu     = $("#playMenu");
 const menuPresent  = $("#menuPresent");
@@ -170,6 +174,10 @@ const prevBtn        = $("#prevBtn");
 const nextBtn        = $("#nextBtn");
 const fsBtn          = $("#fsBtn");
 const closePlayer    = $("#closePlayer");
+
+/* Timeline (auto movie mode) */
+const timeline = $("#timeline");
+const tlFill   = $("#tlFill");
 
 const fileMulti      = $("#fileMulti");
 const fileSingle     = $("#fileSingle");
@@ -298,11 +306,11 @@ function bindUI(){
     transOptions.dataset._init="1";
   }
 
-  // Presentation (manual) — kept for backward‑compat if HTML still has old button
+  // Legacy Present button (if still in HTML)
   const presentBtn = $("#presentBtn");
   on(presentBtn, "click", openPresentation);
 
-  // NEW: Present ▾ dropdown
+  // Present ▾ dropdown
   on(playToggle, "click", ()=>{
     if(!playMenu) return;
     const open = playMenu.classList.contains("hidden");
@@ -325,11 +333,15 @@ function bindUI(){
     startAutoPlay();   // auto slideshow
   });
 
-  // Player UI (manual)
-  on(prevBtn, ()=> showAt(curIdx-1));
-  on(nextBtn, ()=> showAt(curIdx+1));
-  on(fsBtn, ()=>{ if(!document.fullscreenElement) player?.requestFullscreen?.(); else document.exitFullscreen?.(); });
-  on(closePlayer, ()=> closePresentation());
+  // Player UI — make handlers robust
+  on(prevBtn, "click", (e)=>{ e.stopPropagation(); showAt(curIdx-1); });
+  on(nextBtn, "click", (e)=>{ e.stopPropagation(); showAt(curIdx+1); });
+  on(fsBtn,   "click", async (e)=>{ e.stopPropagation();
+    if(document.fullscreenElement){ await document.exitFullscreen?.(); }
+    else { await goFullscreen(player); }
+  });
+  on(closePlayer, "click", (e)=>{ e.stopPropagation(); closePresentation(); });
+
   on(stage,"click", ()=>{
     const v = stageMedia?.firstElementChild;
     if(v && v.tagName==="VIDEO" && !v.controls){ if(v.paused) v.play().catch(()=>{}); else v.pause(); }
@@ -404,6 +416,22 @@ async function showPicker(){
 function hidePicker(){ picker.classList.remove("open"); document.body.classList.remove("sheet-open"); }
 
 // =========================
+/* Present helpers */
+// =========================
+async function goFullscreen(target = player){
+  try{
+    if(document.fullscreenElement) return true;
+    if(target?.requestFullscreen){ await target.requestFullscreen(); return true; }
+  }catch{}
+  try{
+    // iOS best-effort fallback: enter video fullscreen if available
+    const v = target?.querySelector?.("video");
+    if(v && v.webkitEnterFullscreen){ v.webkitEnterFullscreen(); return true; }
+  }catch{}
+  return false;
+}
+
+// =========================
 // Persist
 // =========================
 async function openProject(id){
@@ -455,7 +483,7 @@ async function replaceSingle(file){
   if(state.pendingReplace && state.pendingReplace.shotId && state.pendingReplace.shotId!=="__empty__"){
     const {sceneId, shotId} = state.pendingReplace;
     const sc=getScene(sceneId); const idx=sc?.shots.findIndex(s=>s&&s.id===shotId);
-    if(idx>=0){ sc.shots[idx]=makeShot({ type:file.type.startsWith("video")?"video":"image", src:dataUrl, filename:file.name||"shot" }); ensureTrailingEmpty(sc); }
+    if(idx>=0){ sc.shots[idx]=makeShot({ type:file.type.startsWith("video")?"video":"image", src=dataUrl, filename:file.name||"shot" }); ensureTrailingEmpty(sc); }
   }else{
     await addFilesToScene([file]);
   }
@@ -623,8 +651,22 @@ function setShotMeta(shotId, patch){ state.scenes.forEach(s=> s.shots.forEach(sh
 // Presentation (manual)
 // =========================
 let curIdx=0;
-function openPresentation(){ state.flatIndex=flattenShots(); if(state.flatIndex.length===0) return; curIdx=0; player.classList.add("open"); player.setAttribute("aria-hidden","false"); prevBtn.disabled=false; nextBtn.disabled=false; showAt(0); }
-function closePresentation(){ player.classList.remove("open"); player.setAttribute("aria-hidden","true"); stageMedia.innerHTML=""; stopAutoPlay(); prevBtn.disabled=false; nextBtn.disabled=false; }
+function openPresentation(){
+  state.flatIndex=flattenShots(); if(state.flatIndex.length===0) return;
+  curIdx=0; player.classList.add("open"); player.classList.remove("auto");
+  player.setAttribute("aria-hidden","false");
+  prevBtn.disabled=false; nextBtn.disabled=false;
+  if(tlFill) tlFill.style.width="0%";
+  showAt(0);
+}
+function closePresentation(){
+  player.classList.remove("open","auto");
+  player.setAttribute("aria-hidden","true");
+  stageMedia.innerHTML="";
+  stopAutoPlay();
+  prevBtn.disabled=false; nextBtn.disabled=false;
+  if(tlFill) tlFill.style.width="0%";
+}
 function flattenShots(){ const arr=[]; state.scenes.forEach(s=> s.shots.filter(Boolean).forEach(sh=> arr.push({scene:s, shot:sh}))); return arr; }
 function showAt(i){
   const n=state.flatIndex.length; curIdx=(i%n + n)%n;
@@ -640,69 +682,128 @@ function showAt(i){
 }
 
 // =========================
-// NEW — Auto‑play slideshow (“Play movie”)
+// Auto‑play slideshow (“Play movie”) with timeline + fullscreen
 // =========================
 let autoTimer = null;
 let autoAudio = null;
 let autoAbort = false;
+let tlInterval = null;
+let segStart = 0, segDur = 0, durations = [], totalDur = 0, elapsedBeforeSeg = 0;
 
 function stopAutoPlay(){
   autoAbort = true;
   if(autoTimer){ clearTimeout(autoTimer); autoTimer=null; }
   if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
+  if(tlInterval){ clearInterval(tlInterval); tlInterval=null; }
+}
+
+function getVideoDuration(src){
+  return new Promise(resolve=>{
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.src = src;
+    v.onloadedmetadata = ()=> resolve(Number.isFinite(v.duration) ? Math.min(7, v.duration) : 7);
+    v.onerror = ()=> resolve(7);
+  });
+}
+
+async function computeDurations(seq){
+  return Promise.all(seq.map(({shot})=>{
+    if(shot.type==="image"){
+      return Math.max(7, shot.meta.voiceNote?.duration || 0);
+    }else{
+      return getVideoDuration(shot.src); // cap at 7s for consistency
+    }
+  }));
+}
+function startTimelineWatcher(){
+  if(!tlFill) return;
+  if(tlInterval) clearInterval(tlInterval);
+  tlInterval = setInterval(()=>{
+    const now = performance.now();
+    const segElapsed = Math.min((now - segStart)/1000, segDur);
+    const elapsed = elapsedBeforeSeg + segElapsed;
+    const ratio = totalDur ? Math.max(0, Math.min(1, elapsed / totalDur)) : 0;
+    tlFill.style.width = (ratio*100).toFixed(2) + "%";
+  }, 150);
 }
 
 function startAutoPlay(){
   const seq = flattenShots();
   if(seq.length===0){ toast("Add shots first"); return; }
 
-  player.classList.add("open"); player.setAttribute("aria-hidden","false");
+  player.classList.add("open","auto");
+  player.setAttribute("aria-hidden","false");
   prevBtn.disabled = true; nextBtn.disabled = true;
 
-  autoAbort = false;
-  let i = 0;
+  (async ()=>{
+    durations = await computeDurations(seq);
+    totalDur = durations.reduce((a,b)=> a+b, 0);
+    elapsedBeforeSeg = 0;
+    tlFill && (tlFill.style.width="0%");
 
-  const playStep = async () => {
-    if(autoAbort){ return; }
-    if(i >= seq.length){ closePresentation(); return; }
+    // try fullscreen (desktop); iOS may need video element later
+    goFullscreen(player);
 
-    const {scene, shot} = seq[i];
+    autoAbort = false;
+    let i = 0;
 
-    stageMedia.innerHTML = "";
-    if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
+    const playStep = async () => {
+      if(autoAbort){ return; }
+      if(i >= seq.length){ closePresentation(); return; }
 
-    ovTL.textContent = scene.name;
-    ovTR.textContent = `${shot.meta.lens} · ${shot.meta.shotType} • ${shot.meta.transition||"Cut"}`;
-    ovB.textContent  = shot.meta.dialogue || shot.meta.notes || "";
+      const {scene, shot} = seq[i];
+      segDur = durations[i] || 7;
+      segStart = performance.now();
+      startTimelineWatcher();
 
-    if(shot.type === "image"){
-      const img = new Image(); img.src = shot.src; stageMedia.appendChild(img);
-      const hold = Math.max(7, shot.meta.voiceNote?.duration || 0);
-      if(shot.meta.voiceNote?.dataUrl){
-        autoAudio = new Audio(shot.meta.voiceNote.dataUrl);
-        autoAudio.play().catch(()=>{ /* ignore */});
+      stageMedia.innerHTML = "";
+      if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
+
+      ovTL.textContent = scene.name;
+      ovTR.textContent = `${shot.meta.lens} · ${shot.meta.shotType} • ${shot.meta.transition||"Cut"}`;
+      ovB.textContent  = shot.meta.dialogue || shot.meta.notes || "";
+
+      if(shot.type === "image"){
+        const img = new Image(); img.src = shot.src;
+        stageMedia.appendChild(img);
+
+        if(shot.meta.voiceNote?.dataUrl){
+          autoAudio = new Audio(shot.meta.voiceNote.dataUrl);
+          autoAudio.play().catch(()=>{});
+        }
+        autoTimer = setTimeout(()=>{ 
+          elapsedBeforeSeg += segDur; 
+          i++; playStep(); 
+        }, segDur*1000);
+
+      }else{
+        const v = document.createElement("video");
+        v.src = shot.src;
+        v.autoplay = true; v.controls = false; v.muted = false;
+        v.playsInline = true; v.setAttribute("playsinline",""); v.setAttribute("webkit-playsinline","");
+        v.style.width="100%"; v.style.height="100%"; v.style.objectFit="cover"; // fill screen
+        stageMedia.appendChild(v);
+
+        // iOS fallback: once a video exists, try video fullscreen
+        goFullscreen(v);
+
+        let advanced = false;
+        const advance = ()=>{ if(advanced) return; advanced=true;
+          elapsedBeforeSeg += segDur; i++; playStep();
+        };
+        v.onended = advance;
+        v.addEventListener("loadeddata", ()=> v.play().catch(()=>{}), { once:true });
+
+        autoTimer = setTimeout(advance, segDur*1000); // safety cap
       }
-      autoTimer = setTimeout(()=>{ i++; playStep(); }, hold*1000);
-    }else{
-      const v = document.createElement("video");
-      v.src = shot.src;
-      v.autoplay = true; v.controls = false; v.muted = false;
-      v.playsInline = true; v.setAttribute("playsinline",""); v.setAttribute("webkit-playsinline","");
-      v.style.width="100%"; v.style.height="100%"; v.style.objectFit="contain";
-      stageMedia.appendChild(v);
+    };
 
-      let advanced = false;
-      const advance = ()=>{ if(advanced) return; advanced=true; i++; playStep(); };
-      v.onended = advance;
-      v.addEventListener("loadeddata", ()=> v.play().catch(()=>{}), { once:true });
-      autoTimer = setTimeout(advance, 7000); // cap at 7s
-    }
-  };
+    const origClose = closePlayer.onclick;
+    closePlayer.onclick = ()=>{ stopAutoPlay(); closePresentation(); closePlayer.onclick = origClose; };
 
-  const origClose = closePlayer.onclick;
-  closePlayer.onclick = ()=>{ stopAutoPlay(); closePresentation(); closePlayer.onclick = origClose; };
-
-  playStep();
+    playStep();
+  })();
 }
 
 // =========================
@@ -730,10 +831,6 @@ async function ensureFFmpeg(){
     return false;
   }
 }
-function importScript(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=()=>res(); s.onerror=rej; document.head.appendChild(s); }); }
-function strToUint8(s){ return new TextEncoder().encode(s); }
-function dataURLtoUint8(dataUrl){ const [,b64]=dataUrl.split(','); const bin=atob(b64); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i); return bytes; }
-
 async function exportFilmSmart(){ toast("Export started"); if(await ensureFFmpeg()){ await exportFilmMP4(); } else { await exportFilmWebM(); } }
 
 async function exportFilmMP4(){
@@ -838,7 +935,7 @@ function audioBufferToWavBytes(ab){
   let off=44, chData=[]; for(let ch=0; ch<numCh; ch++) chData.push(ab.getChannelData(ch));
   for(let i=0;i<samples;i++){ for(let ch=0; ch<numCh; ch++){ let s = Math.max(-1, Math.min(1, chData[ch][i])); view.setInt16(off, s<0?s*0x8000:s*0x7FFF, true); off+=2; } }
   return new Uint8Array(buffer);
-  function writeStr(v,o,s){ for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); }
+  function writeStr(v,o,s){ for(let i=0; i<s.length; i++) v.setUint8(o+i, s.charCodeAt(i)); }
 }
 
 // Fallback renderer with progress
@@ -868,7 +965,7 @@ async function exportFilmWebM(){
     ctx.save(); ctx.font="700 16px system-ui"; const tw=ctx.measureText(txt).width+24;
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(width-tw-10,10,tw,28); ctx.fillStyle="#e9eef9"; ctx.fillText(txt,width-tw+2,30); ctx.restore();
     if(shot.meta.dialogue || shot.meta.notes){
-      const text=shot.meta.dialogue || shot.meta.notes; ctx.save(); ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,width,80); // top subtitles (for visibility)
+      const text=shot.meta.dialogue || shot.meta.notes; ctx.save(); ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,width,80);
       ctx.fillStyle="#e9eef9"; ctx.font="700 20px system-ui"; wrapText(ctx,text,width-60).forEach((ln,i)=> ctx.fillText(ln,30,50+i*24)); ctx.restore();
     }
   }
