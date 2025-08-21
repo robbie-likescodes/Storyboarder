@@ -1,6 +1,4 @@
-/* =========================
-   Theme
-   ========================= */
+/* =============== THEME TOKENS =============== */
 :root{
   --bg:#0f1115;
   --panel:#151a22;
@@ -14,6 +12,7 @@
   --shadow:0 10px 30px rgba(0,0,0,.35);
 }
 
+/* =============== BASE =============== */
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
@@ -21,6 +20,8 @@ body{
   background:var(--bg);
   color:var(--text);
   font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
   -webkit-tap-highlight-color:transparent;
 }
 a{color:inherit}
@@ -28,9 +29,7 @@ a{color:inherit}
 .hidden{display:none!important}
 body.sheet-open{overflow:hidden}
 
-/* =========================
-   Top bar
-   ========================= */
+/* =============== TOP BAR =============== */
 .topbar{
   position:sticky; top:0; z-index:1100;
   display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -54,9 +53,7 @@ body.sheet-open{overflow:hidden}
 .small-btn.danger{background:#3b2326; border-color:#5a2f35; color:#ffd9dd}
 .close-btn{width:100%; margin-top:8px; padding:12px; background:#0f1420}
 
-/* =========================
-   Sheets (Menu / Editor / Transition / Picker)
-   ========================= */
+/* =============== SHEETS (menu/editor/transition) =============== */
 .sheet{position:fixed; inset:0; display:none; z-index:10000}
 .sheet.show{display:block}
 .sheet-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.45)}
@@ -84,11 +81,9 @@ body.sheet-open{overflow:hidden}
   padding:6px 10px; border-radius:999px; font-size:12px; cursor:pointer; user-select:none
 }
 .tag.active{background:#18314a; border-color:#2d4f75}
-.audio-bar{display:flex; align-items:center; gap:8px; margin:6px 0}
+.audio-bar{display:flex; align-items:center; gap:10px; margin:6px 0}
 
-/* =========================
-   Comic view (scenes + strip)
-   ========================= */
+/* =============== COMIC VIEW =============== */
 .comic-head{padding:8px 14px 0}
 .hint{margin:0 0 8px; color:var(--muted); font-size:13px}
 
@@ -151,9 +146,7 @@ body.sheet-open{overflow:hidden}
 
 .dragging{opacity:.6}
 
-/* =========================
-   Board view (vertical gallery)
-   ========================= */
+/* =============== BOARD VIEW =============== */
 .board{padding:10px 8px calc(80px + env(safe-area-inset-bottom)); display:grid; gap:12px}
 .dropzone{
   border:2px dashed #3b4866; border-radius:14px;
@@ -175,9 +168,7 @@ body.sheet-open{overflow:hidden}
 }
 .gallery-meta{padding:10px 12px; border-top:1px solid var(--border)}
 
-/* =========================
-   Presentation Player
-   ========================= */
+/* =============== PRESENTATION PLAYER =============== */
 .player{position:fixed; inset:0; background:rgba(5,8,12,.95); display:none; flex-direction:column; z-index:12000}
 .player.open{display:flex}
 .player .player-chrome{
@@ -196,35 +187,34 @@ body.sheet-open{overflow:hidden}
   position:absolute; pointer-events:none;
   padding:10px 12px; border-radius:10px;
   background:linear-gradient(180deg,rgba(14,18,26,.75),rgba(14,18,26,.6));
-  border:1px solid #243043; color:#e9f2ff; font-size:14px;
-  text-shadow:0 1px 2px #000
+  border:1px solid #243043; color:#e9f2ff; font-size:14px; text-shadow:0 1px 2px #000
 }
 .overlay.top-left{top:14px; left:14px}
 .overlay.top-right{top:14px; right:14px; text-align:right}
 .overlay.bottom{
-  left:50%; transform:translateX(-50%);
-  bottom:18px; max-width:min(900px,90vw);
+  left:50%; transform:translateX(-50%); bottom:18px;
+  max-width:min(900px,90vw);
   background:linear-gradient(0deg,rgba(10,12,16,.9),rgba(10,12,16,.6))
 }
 
-/* =========================
-   Spacing
-   ========================= */
+/* =============== PROJECT PICKER (scrollable) =============== */
+#picker{
+  position:fixed; inset:0; background:#0f1115; color:#e8ecf3;
+  z-index:15000; display:none;
+}
+#picker.open{display:flex; flex-direction:column}
+#picker .picker-scroll{
+  flex:1; overflow:auto; -webkit-overflow-scrolling:touch;
+  padding:12px; padding-bottom:calc(12px + env(safe-area-inset-bottom));
+}
+#picker .picker-grid{
+  display:grid; gap:12px;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+}
+
+/* =============== MISC =============== */
 .spacer-80{height:calc(80px + env(safe-area-inset-bottom))}
-
-/* =========================
-   Project Picker quick defaults
-   ========================= */
-#picker .small-btn{padding:8px 10px}
-#picker .small-btn.danger{background:#3b2326; border-color:#5a2f35; color:#ffd9dd}
-
-/* =========================
-   Responsive
-   ========================= */
-@media (max-width: 480px){
+@media (max-width:480px){
   .shot{flex-basis:200px; max-width:200px}
   .sheet-grid{grid-template-columns:1fr}
 }
-
-/* tiny transition for injected toasts */
-#toasts > div{transition:opacity .25s}
