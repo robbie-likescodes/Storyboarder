@@ -189,7 +189,8 @@ body.sheet-open{overflow:hidden}
 .player .player-chrome{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding:10px 14px; border-bottom:1px solid var(--border);
-  background:rgba(12,16,22,.8)
+  background:rgba(12,16,22,.8);
+  position:relative; z-index:5; /* always clickable above media */
 }
 .player .stage{flex:1; position:relative; display:grid; place-items:center; overflow:hidden}
 .stage-media{max-width:100%; max-height:100%; display:grid; place-items:center}
@@ -198,6 +199,11 @@ body.sheet-open{overflow:hidden}
   object-fit:contain;
   border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.6)
 }
+/* Auto movie mode tweaks */
+.player.auto .controls-left{ display:none }               /* hide arrows */
+.player.auto .stage-media video{ object-fit:cover }       /* fill frame */
+
+/* Overlay labels */
 .overlay{
   position:absolute; pointer-events:none;
   padding:10px 12px; border-radius:10px;
@@ -211,6 +217,18 @@ body.sheet-open{overflow:hidden}
   max-width:min(900px,90vw);
   background:linear-gradient(0deg,rgba(10,12,16,.9),rgba(10,12,16,.6))
 }
+
+/* Timeline bar (appears in auto movie mode) */
+#timeline{
+  position:absolute; left:14px; right:14px; bottom:-6px;
+  height:4px; border:1px solid var(--border); background:#0f1420;
+  border-radius:999px; overflow:hidden; display:none;
+}
+#timeline #tlFill{
+  height:100%; width:0%;
+  background:linear-gradient(90deg,#6aa1ff,#87b4ff);
+}
+.player.auto #timeline{ display:block }
 
 /* =============== PROJECT PICKER (scrollable) =============== */
 #picker{
