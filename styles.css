@@ -41,7 +41,7 @@ body.sheet-open{overflow:hidden}
 .brand{display:flex; align-items:center; gap:10px}
 .logo{filter:drop-shadow(0 2px 6px rgba(135,180,255,.5))}
 .title{font-weight:700}
-.top-actions{display:flex; gap:8px}
+.top-actions{position:relative; display:flex; gap:8px}
 
 .icon-btn,.seg,.small-btn,.close-btn{
   appearance:none; border:1px solid var(--border); color:var(--text);
@@ -52,6 +52,21 @@ body.sheet-open{overflow:hidden}
 .small-btn{padding:8px 10px; font-size:13px; background:#0f1420}
 .small-btn.danger{background:#3b2326; border-color:#5a2f35; color:#ffd9dd}
 .close-btn{width:100%; margin-top:8px; padding:12px; background:#0f1420}
+
+/* Dropdown for Present ▾ */
+.menu-anchor{ position:relative; cursor:pointer; user-select:none }
+.dropdown{
+  position:absolute; right:0; top:46px; z-index:1300;
+  background:var(--panel); border:1px solid var(--border); border-radius:12px;
+  padding:6px; box-shadow:var(--shadow);
+}
+.dropdown.hidden{ display:none }
+.menu-item{
+  display:block; width:100%; text-align:left;
+  padding:8px 10px; border-radius:8px; background:transparent; color:var(--text);
+  border:0; cursor:pointer; font:inherit;
+}
+.menu-item:hover{ background:#0f1420 }
 
 /* =============== SHEETS (menu/editor/transition) =============== */
 .sheet{position:fixed; inset:0; display:none; z-index:10000}
