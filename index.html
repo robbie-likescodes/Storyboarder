@@ -3,11 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f1115">
   <title>Storyboard</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Top bar -->
+  <!-- ===== Top bar ===== -->
   <header class="topbar">
     <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
     <div class="brand">
@@ -16,11 +18,11 @@
     </div>
     <div class="top-actions">
       <button id="presentBtn" class="seg">Present ▶</button>
-      <button id="viewToggle" class="seg">Comic ▾</button>
+      <button id="viewToggle" class="seg" aria-haspopup="true">Comic ▾</button>
     </div>
   </header>
 
-  <!-- Action sheet -->
+  <!-- ===== Actions sheet (menu) ===== -->
   <div id="sheet" class="sheet" aria-hidden="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" role="dialog" aria-label="Actions">
@@ -29,34 +31,36 @@
       <div class="sheet-grid">
         <button id="addSceneBtn" class="sheet-btn">➕ Add Scene</button>
         <button id="addShotsBtn" class="sheet-btn">📥 Add Shots</button>
-        <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (WebM)</button>
+        <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (MP4)</button>
         <button id="exportBtn" class="sheet-btn">⤵ Export JSON</button>
         <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
         <button id="clearBtn" class="sheet-btn danger">🗑 Clear Project</button>
       </div>
+
       <div class="row">
         <label class="field">
           <span>Project name</span>
           <input id="projectName" type="text" placeholder="Untitled project" />
         </label>
       </div>
+
       <button id="closeSheet" class="close-btn">Close</button>
     </div>
   </div>
 
-  <!-- Views -->
+  <!-- ===== Main content (Comic & Board views) ===== -->
   <main id="main">
     <!-- Comic View -->
     <section id="comicView" class="comic">
       <div class="comic-head">
-        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit or toggle info. Drag to reorder within a scene.</p>
+        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit. Long‑press a shot for replace/duplicate/delete.</p>
       </div>
       <div id="scenes" class="scenes"></div>
       <div class="spacer-80"></div>
     </section>
 
-    <!-- Board View (full-size vertical gallery) -->
-    <section id="boardView" class="board hidden">
+    <!-- Board View (vertical gallery) -->
+    <section id="boardView" class="board hidden" aria-label="Board view">
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Add media">
         <div class="dz-inner">
           <strong>Drop images/videos</strong>
@@ -67,7 +71,7 @@
     </section>
   </main>
 
-  <!-- Shot Editor Sheet -->
+  <!-- ===== Shot Editor sheet ===== -->
   <div id="editor" class="sheet" aria-hidden="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" role="dialog" aria-label="Edit shot">
@@ -91,12 +95,13 @@
           <select id="edTransition">
             <option>Cut</option><option>Dissolve</option><option>Fade</option>
             <option>Wipe</option><option>Match Cut</option><option>Whip Pan</option>
+            <option>J-Cut</option><option>L-Cut</option>
           </select>
         </label>
       </div>
 
       <div class="row">
-        <div class="tags-label">Movements</div>
+        <div class="tags-label muted">Movements</div>
         <div id="edMoves" class="tags"></div>
       </div>
 
@@ -117,7 +122,7 @@
     </div>
   </div>
 
-  <!-- Transition picker (quick chip tap) -->
+  <!-- ===== Transition picker ===== -->
   <div id="transPicker" class="sheet" aria-hidden="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" role="dialog" aria-label="Transition">
@@ -128,7 +133,7 @@
     </div>
   </div>
 
-  <!-- Presentation Modal -->
+  <!-- ===== Presentation player ===== -->
   <div id="player" class="player" aria-hidden="true">
     <div class="player-chrome">
       <button id="closePlayer" class="icon-btn" title="Close">✕</button>
@@ -148,11 +153,12 @@
     </div>
   </div>
 
-  <!-- Hidden file inputs -->
+  <!-- ===== Hidden file inputs ===== -->
   <input id="fileMulti" type="file" accept="image/*,video/*" multiple hidden />
   <input id="fileSingle" type="file" accept="image/*,video/*" hidden />
   <input id="importFile" type="file" accept="application/json" hidden />
 
+  <!-- App JS (handles ffmpeg loader & project picker) -->
   <script src="app.js"></script>
 </body>
 </html>
