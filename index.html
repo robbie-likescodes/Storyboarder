@@ -2,87 +2,72 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Storyboard Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Storyboard Comic View</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<header class="app-header">
-  <div class="brand">
-    <div class="logo">🎬</div>
-    <div>
-      <h1>Storyboard Studio</h1>
-      <p class="tagline">Plan shots, annotate, present.</p>
+  <!-- Top bar -->
+  <header class="topbar">
+    <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+    <div class="brand">
+      <span class="logo">🎬</span>
+      <span class="title">Storyboard</span>
+    </div>
+    <button id="viewToggle" class="seg" aria-label="Toggle view">Comic ▾</button>
+  </header>
+
+  <!-- Action sheet menu (mobile-friendly) -->
+  <div id="sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-body" role="dialog" aria-label="Actions">
+      <div class="sheet-grabber"></div>
+      <h2>Actions</h2>
+      <div class="sheet-grid">
+        <button id="addSceneBtn" class="sheet-btn">➕ Add Scene</button>
+        <button id="addShotsBtn" class="sheet-btn">📥 Add Shots</button>
+        <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
+        <button id="exportBtn" class="sheet-btn">⤵ Export JSON</button>
+        <button id="clearBtn" class="sheet-btn danger">🗑 Clear Project</button>
+      </div>
+      <div class="row">
+        <label class="field">
+          <span>Project name</span>
+          <input id="projectName" type="text" placeholder="Untitled project" />
+        </label>
+      </div>
+      <button id="closeSheet" class="close-btn">Close</button>
     </div>
   </div>
 
-  <nav class="toolbar">
-    <label class="btn primary">
-      <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden />
-      ➕ Add Media
-    </label>
+  <!-- View switcher -->
+  <main id="main">
+    <!-- Comic Strip View -->
+    <section id="comicView" class="comic">
+      <div class="comic-head">
+        <p class="hint">Tap any empty box to add a shot. Tap a shot to toggle info. Drag to reorder within a scene.</p>
+      </div>
+      <div id="scenes" class="scenes"></div>
+      <div class="spacer-80"></div>
+    </section>
 
-    <button id="addBlankBtn" class="btn">➕ Blank Slide</button>
+    <!-- Classic Board View (optional quick add) -->
+    <section id="boardView" class="board hidden">
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Add media">
+        <div class="dz-inner">
+          <strong>Drop images/videos</strong>
+          <small>…or tap here to pick from camera roll</small>
+        </div>
+      </div>
+      <ul id="boardList" class="board-list" aria-live="polite"></ul>
+    </section>
+  </main>
 
-    <label class="btn">
-      <input id="importJson" type="file" accept="application/json" hidden />
-      ⤴ Import JSON
-    </label>
-    <button id="exportJsonBtn" class="btn">⤵ Export JSON</button>
-    <button id="printBtn" class="btn">🖨 Print / PDF</button>
+  <!-- Hidden file inputs -->
+  <input id="fileMulti" type="file" accept="image/*,video/*" multiple hidden />
+  <input id="fileSingle" type="file" accept="image/*,video/*" hidden />
+  <input id="importFile" type="file" accept="application/json" hidden />
 
-    <button id="presentBtn" class="btn accent">▶ Presentation</button>
-    <button id="clearBtn" class="btn danger outline">🗑 Clear All</button>
-  </nav>
-</header>
-
-<main>
-  <section id="dropzone" class="dropzone" aria-label="Drag and drop media here">
-    <div class="drop-hint">
-      <strong>Drop images or videos</strong>
-      <span>…or click “Add Media”. Videos will play with audio in presentation.</span>
-    </div>
-  </section>
-
-  <section id="slidesContainer" class="slides-grid" aria-live="polite"></section>
-</main>
-
-<footer class="app-footer">
-  <span id="statusMsg">Ready.</span>
-  <span class="spacer"></span>
-  <label class="switch">
-    <input id="themeToggle" type="checkbox" />
-    <span class="slider"></span>
-    <span class="label">Dark</span>
-  </label>
-</footer>
-
-<!-- Presentation Overlay -->
-<div id="player" class="player" aria-hidden="true">
-  <div class="player-chrome">
-    <button id="closePlayer" class="icon-btn" title="Close (Esc)">✕</button>
-    <div class="controls-left">
-      <button id="prevBtn" class="icon-btn" title="Previous (←)">⟵</button>
-      <button id="nextBtn" class="icon-btn" title="Next (→)">⟶</button>
-      <button id="autoBtn" class="icon-btn" title="Toggle Auto-Advance">⏯</button>
-    </div>
-    <div class="controls-right">
-      <button id="fsBtn" class="icon-btn" title="Fullscreen (F)">⛶</button>
-    </div>
-  </div>
-
-  <div class="stage">
-    <div class="stage-media">
-      <!-- Swapped dynamically between <img> and <video> -->
-    </div>
-
-    <!-- Overlays -->
-    <div class="overlay top-left" id="ovTopLeft"></div>
-    <div class="overlay top-right" id="ovTopRight"></div>
-    <div class="overlay bottom" id="ovBottom"></div>
-  </div>
-</div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
