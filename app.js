@@ -1,12 +1,13 @@
-/* Storyboard App — comprehensive JS
-   - Multi‑project (IndexedDB) + Project Picker
+/* Storyboard App — full JS (with Present ▾ / Play movie)
+   - Multi‑project (IndexedDB) + scrollable Project Picker
    - Comic / Board / Presentation
    - Editor (lens, type, moves, transition, dialogue, notes) + voice notes
    - Replace/Delete from Editor
    - Transitions between shots
    - Export MP4 (ffmpeg.wasm via CDN) with full audio mix, progress UI + toasts
    - WebM fallback with progress
-   - iPhone-friendly video rendering
+   - iPhone-friendly presentation/video
+   - NEW: Present ▾ dropdown (Manual Present + Auto “Play movie”)
 */
 
 (()=>{
@@ -112,7 +113,7 @@ function emptyProjectRecord(id, name){
 }
 
 // =========================
-/* Element refs (match index.html) */
+// Element refs (match index.html)
 // =========================
 const homeBtn        = $("#homeBtn");
 const menuBtn        = $("#menuBtn");
@@ -127,13 +128,18 @@ const exportBtn      = $("#exportBtn");
 const clearBtn       = $("#clearBtn");
 const projectNameInp = $("#projectName");
 
-const presentBtn     = $("#presentBtn");
 const viewToggle     = $("#viewToggle");
 const comicView      = $("#comicView");
 const scenesWrap     = $("#scenes");
 const boardView      = $("#boardView");
 const dropzone       = $("#dropzone");
 const gallery        = $("#gallery");
+
+/* NEW: Present ▾ dropdown elements */
+const playToggle   = $("#playToggle");
+const playMenu     = $("#playMenu");
+const menuPresent  = $("#menuPresent");
+const menuPlay     = $("#menuPlay");
 
 const editor         = $("#editor");
 const editorTitle    = $("#editorTitle");
@@ -292,8 +298,34 @@ function bindUI(){
     transOptions.dataset._init="1";
   }
 
-  // Presentation
-  on(presentBtn,"click", openPresentation);
+  // Presentation (manual) — kept for backward‑compat if HTML still has old button
+  const presentBtn = $("#presentBtn");
+  on(presentBtn, "click", openPresentation);
+
+  // NEW: Present ▾ dropdown
+  on(playToggle, "click", ()=>{
+    if(!playMenu) return;
+    const open = playMenu.classList.contains("hidden");
+    document.querySelectorAll(".dropdown").forEach(d=>d.classList.add("hidden"));
+    playMenu.classList.toggle("hidden", !open);
+    playToggle.setAttribute("aria-expanded", String(open));
+  });
+  on(document, "click", (e)=>{
+    if(!e.target.closest("#playToggle") && !e.target.closest("#playMenu")){
+      playMenu?.classList.add("hidden");
+      playToggle?.setAttribute("aria-expanded","false");
+    }
+  });
+  on(menuPresent, "click", ()=>{
+    playMenu?.classList.add("hidden");
+    openPresentation(); // manual mode
+  });
+  on(menuPlay, "click", ()=>{
+    playMenu?.classList.add("hidden");
+    startAutoPlay();   // auto slideshow
+  });
+
+  // Player UI (manual)
   on(prevBtn, ()=> showAt(curIdx-1));
   on(nextBtn, ()=> showAt(curIdx+1));
   on(fsBtn, ()=>{ if(!document.fullscreenElement) player?.requestFullscreen?.(); else document.exitFullscreen?.(); });
@@ -588,11 +620,11 @@ function playVoiceNote(){ const shot=getShot(state.editRef?.sceneId, state.editR
 function setShotMeta(shotId, patch){ state.scenes.forEach(s=> s.shots.forEach(sh=>{ if(sh && sh.id===shotId) Object.assign(sh.meta, patch); })); persistDebounced(); renderAll(); }
 
 // =========================
-// Presentation
+// Presentation (manual)
 // =========================
 let curIdx=0;
-function openPresentation(){ state.flatIndex=flattenShots(); if(state.flatIndex.length===0) return; curIdx=0; player.classList.add("open"); player.setAttribute("aria-hidden","false"); showAt(0); }
-function closePresentation(){ player.classList.remove("open"); player.setAttribute("aria-hidden","true"); stageMedia.innerHTML=""; }
+function openPresentation(){ state.flatIndex=flattenShots(); if(state.flatIndex.length===0) return; curIdx=0; player.classList.add("open"); player.setAttribute("aria-hidden","false"); prevBtn.disabled=false; nextBtn.disabled=false; showAt(0); }
+function closePresentation(){ player.classList.remove("open"); player.setAttribute("aria-hidden","true"); stageMedia.innerHTML=""; stopAutoPlay(); prevBtn.disabled=false; nextBtn.disabled=false; }
 function flattenShots(){ const arr=[]; state.scenes.forEach(s=> s.shots.filter(Boolean).forEach(sh=> arr.push({scene:s, shot:sh}))); return arr; }
 function showAt(i){
   const n=state.flatIndex.length; curIdx=(i%n + n)%n;
@@ -608,13 +640,78 @@ function showAt(i){
 }
 
 // =========================
+// NEW — Auto‑play slideshow (“Play movie”)
+// =========================
+let autoTimer = null;
+let autoAudio = null;
+let autoAbort = false;
+
+function stopAutoPlay(){
+  autoAbort = true;
+  if(autoTimer){ clearTimeout(autoTimer); autoTimer=null; }
+  if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
+}
+
+function startAutoPlay(){
+  const seq = flattenShots();
+  if(seq.length===0){ toast("Add shots first"); return; }
+
+  player.classList.add("open"); player.setAttribute("aria-hidden","false");
+  prevBtn.disabled = true; nextBtn.disabled = true;
+
+  autoAbort = false;
+  let i = 0;
+
+  const playStep = async () => {
+    if(autoAbort){ return; }
+    if(i >= seq.length){ closePresentation(); return; }
+
+    const {scene, shot} = seq[i];
+
+    stageMedia.innerHTML = "";
+    if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
+
+    ovTL.textContent = scene.name;
+    ovTR.textContent = `${shot.meta.lens} · ${shot.meta.shotType} • ${shot.meta.transition||"Cut"}`;
+    ovB.textContent  = shot.meta.dialogue || shot.meta.notes || "";
+
+    if(shot.type === "image"){
+      const img = new Image(); img.src = shot.src; stageMedia.appendChild(img);
+      const hold = Math.max(7, shot.meta.voiceNote?.duration || 0);
+      if(shot.meta.voiceNote?.dataUrl){
+        autoAudio = new Audio(shot.meta.voiceNote.dataUrl);
+        autoAudio.play().catch(()=>{ /* ignore */});
+      }
+      autoTimer = setTimeout(()=>{ i++; playStep(); }, hold*1000);
+    }else{
+      const v = document.createElement("video");
+      v.src = shot.src;
+      v.autoplay = true; v.controls = false; v.muted = false;
+      v.playsInline = true; v.setAttribute("playsinline",""); v.setAttribute("webkit-playsinline","");
+      v.style.width="100%"; v.style.height="100%"; v.style.objectFit="contain";
+      stageMedia.appendChild(v);
+
+      let advanced = false;
+      const advance = ()=>{ if(advanced) return; advanced=true; i++; playStep(); };
+      v.onended = advance;
+      v.addEventListener("loadeddata", ()=> v.play().catch(()=>{}), { once:true });
+      autoTimer = setTimeout(advance, 7000); // cap at 7s
+    }
+  };
+
+  const origClose = closePlayer.onclick;
+  closePlayer.onclick = ()=>{ stopAutoPlay(); closePresentation(); closePlayer.onclick = origClose; };
+
+  playStep();
+}
+
+// =========================
 // Export — MP4 via ffmpeg (CDN) with audio mix; WebM fallback
 // =========================
 let ffmpeg=null;
 async function ensureFFmpeg(){
   if(ffmpeg) return true;
   try{
-    // Wrapper
     await importScript("https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js");
     const { createFFmpeg } = window.FFmpeg;
     ffmpeg = createFFmpeg({
@@ -720,7 +817,7 @@ async function buildFullAudioTrack(flat){
       try{
         const ab=await fetch(shot.src).then(r=>r.arrayBuffer());
         const buf=await ctx.decodeAudioData(ab);
-        const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); src.start(t); // src.stop(t+7); // optional hard stop
+        const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); src.start(t); // could stop at t+7
       }catch{}
     }
     t += dur;
@@ -771,8 +868,8 @@ async function exportFilmWebM(){
     ctx.save(); ctx.font="700 16px system-ui"; const tw=ctx.measureText(txt).width+24;
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(width-tw-10,10,tw,28); ctx.fillStyle="#e9eef9"; ctx.fillText(txt,width-tw+2,30); ctx.restore();
     if(shot.meta.dialogue || shot.meta.notes){
-      const text=shot.meta.dialogue || shot.meta.notes; ctx.save(); ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,height-80,width,80);
-      ctx.fillStyle="#e9eef9"; ctx.font="700 20px system-ui"; wrapText(ctx,text,width-60).forEach((ln,i)=> ctx.fillText(ln,30,height-50+i*24)); ctx.restore();
+      const text=shot.meta.dialogue || shot.meta.notes; ctx.save(); ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,width,80); // top subtitles (for visibility)
+      ctx.fillStyle="#e9eef9"; ctx.font="700 20px system-ui"; wrapText(ctx,text,width-60).forEach((ln,i)=> ctx.fillText(ln,30,50+i*24)); ctx.restore();
     }
   }
   function wrapText(ctx,text,maxWidth){ const words=String(text||"").split(/\s+/); const lines=[]; let line=""; ctx.font="700 20px system-ui"; for(const w of words){ const t=line?line+" "+w:w; if(ctx.measureText(t).width>maxWidth){ if(line) lines.push(line); line=w; } else line=t; } if(line) lines.push(line); return lines; }
