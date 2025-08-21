@@ -20,7 +20,15 @@
     </div>
 
     <div class="top-actions">
-      <button id="presentBtn" class="seg">Present ▶</button>
+      <!-- Present / Play dropdown -->
+      <div class="seg menu-anchor" id="playToggle" aria-haspopup="true" aria-expanded="false">
+        Present ▾
+      </div>
+      <div id="playMenu" class="dropdown hidden" role="menu" aria-label="Playback">
+        <button class="menu-item" id="menuPresent" role="menuitem">Present (manual)</button>
+        <button class="menu-item" id="menuPlay" role="menuitem">Play movie (auto)</button>
+      </div>
+
       <button id="viewToggle" class="seg" aria-haspopup="true">Comic ▾</button>
     </div>
   </header>
@@ -51,12 +59,12 @@
     </div>
   </div>
 
-  <!-- ===== Main content (Comic & Board views) ===== -->
+  <!-- ===== Main (Comic / Board) ===== -->
   <main id="main">
     <!-- Comic View -->
     <section id="comicView" class="comic">
       <div class="comic-head">
-        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit. Long‑press a shot for replace/duplicate/delete.</p>
+        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit. Long‑press for replace/duplicate/delete.</p>
       </div>
       <div id="scenes" class="scenes"></div>
       <div class="spacer-80"></div>
@@ -74,7 +82,7 @@
     </section>
   </main>
 
-  <!-- ===== Shot Editor sheet ===== -->
+  <!-- ===== Shot Editor ===== -->
   <div id="editor" class="sheet" aria-hidden="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" role="dialog" aria-label="Edit shot">
@@ -121,7 +129,7 @@
         <span id="recStatus" class="muted">No voice note</span>
       </div>
 
-      <!-- Replace / Delete controls inside the editor -->
+      <!-- Replace / Delete -->
       <div class="audio-bar" style="justify-content:flex-start;gap:8px;margin-top:8px">
         <button id="edReplace" class="small-btn">↻ Replace media</button>
         <button id="edDelete" class="small-btn danger">🗑 Delete shot</button>
