@@ -1,493 +1,443 @@
-/* Storyboard Studio — core app
-   - Drag/drop + file input for images/videos
-   - Per-slide metadata editing
-   - Reorder via drag & drop
-   - Presentation view with overlays + video audio
-   - Auto-save to localStorage; JSON import/export; print
+/* Storyboard — iPhone-friendly Comic Strip view
+   - Scenes (rows) each with horizontally scrollable shots
+   - Tap empty box to add; tap shot to toggle info overlay
+   - Reorder by drag within a scene
+   - Dropzone is tappable (opens picker) and drag-drop enabled
+   - Autosave to localStorage; JSON import/export
 */
 
 (() => {
+
   // ---------- State ----------
-  const DEFAULT_IMAGE_DURATION = 4; // seconds for images (auto-advance)
-  let slides = [];                   // {id,type,src,filename,meta}
-  let current = 0;
-  let autoAdvance = false;
-  let autoTimer = null;
-
-  // ---------- Elements ----------
-  const fileInput = qs("#fileInput");
-  const importJson = qs("#importJson");
-  const addBlankBtn = qs("#addBlankBtn");
-  const exportJsonBtn = qs("#exportJsonBtn");
-  const printBtn = qs("#printBtn");
-  const presentBtn = qs("#presentBtn");
-  const clearBtn = qs("#clearBtn");
-  const dropzone = qs("#dropzone");
-  const container = qs("#slidesContainer");
-  const statusMsg = qs("#statusMsg");
-  const themeToggle = qs("#themeToggle");
-
-  // Player
-  const player = qs("#player");
-  const stageMedia = qs(".stage-media");
-  const ovTL = qs("#ovTopLeft");
-  const ovTR = qs("#ovTopRight");
-  const ovB = qs("#ovBottom");
-  const prevBtn = qs("#prevBtn");
-  const nextBtn = qs("#nextBtn");
-  const autoBtn = qs("#autoBtn");
-  const fsBtn = qs("#fsBtn");
-  const closePlayer = qs("#closePlayer");
-
-  // ---------- Utilities ----------
-  const uid = () => Math.random().toString(36).slice(2, 10);
-  function qs(sel, el=document){ return el.querySelector(sel); }
-  function qsa(sel, el=document){ return [...el.querySelectorAll(sel)]; }
-  const debounce = (fn, ms=300) => {
-    let t; return (...args) => { clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
+  const state = {
+    projectName: "",
+    scenes: [], // [{id, name, shots:[Shot]}]
+    autosaveKey: "sb_comic_v1",
+    pendingReplace: null // {sceneId, shotId} when user taps to replace
   };
 
-  function setStatus(msg){ statusMsg.textContent = msg; }
+  // Shot object factory
+  const defaultMeta = () => ({
+    lens: "50mm",
+    shotType: "MS",
+    notes: "",
+    dialogue: ""
+  });
+  const makeShot = ({ type="image", src="", filename="shot.png", meta } = {}) => ({
+    id: uid(),
+    type,       // 'image' | 'video'
+    src,        // dataURL
+    filename,
+    meta: meta || defaultMeta()
+  });
 
-  function persist(){
-    try{
-      localStorage.setItem("storyboard_v1", JSON.stringify(slides));
-      setStatus(`Saved ${slides.length} slide${slides.length!==1?'s':''}.`);
-    }catch(e){
-      setStatus("⚠ Could not save to localStorage (too large?). Export JSON instead.");
-    }
+  // ---------- Elements ----------
+  const el = (s, root=document) => root.querySelector(s);
+
+  const menuBtn = el("#menuBtn");
+  const sheet = el("#sheet");
+  const closeSheet = el("#closeSheet");
+  const addSceneBtn = el("#addSceneBtn");
+  const addShotsBtn = el("#addShotsBtn");
+  const importBtn = el("#importBtn");
+  const exportBtn = el("#exportBtn");
+  const clearBtn = el("#clearBtn");
+  const projectName = el("#projectName");
+
+  const viewToggle = el("#viewToggle");
+  const comicView = el("#comicView");
+  const boardView = el("#boardView");
+  const scenesWrap = el("#scenes");
+
+  const dropzone = el("#dropzone");
+  const boardList = el("#boardList");
+
+  const fileMulti = el("#fileMulti");   // add many
+  const fileSingle = el("#fileSingle"); // add/replace one
+  const importFile = el("#importFile");
+
+  // ---------- Init ----------
+  bindUI();
+  restore();
+  if (state.scenes.length === 0) {
+    addScene(); // start with one scene
   }
-  const persistDebounced = debounce(persist, 400);
+  renderAll();
 
-  function restore(){
-    try{
-      const raw = localStorage.getItem("storyboard_v1");
-      if(!raw) return;
-      slides = JSON.parse(raw) || [];
-      render();
-      setStatus(`Loaded ${slides.length} slide${slides.length!==1?'s':''} from localStorage.`);
-    }catch(e){
-      setStatus("⚠ Failed to load saved storyboard.");
-    }
-  }
-
-  // ---------- Slide creation ----------
-  async function handleFiles(fileList){
-    const files = [...fileList];
-    for(const f of files){
-      if(!/^image\/|^video\//.test(f.type)) continue;
-      const dataUrl = await fileToDataURL(f);
-      const type = f.type.startsWith("video") ? "video" : "image";
-      slides.push({
-        id: uid(),
-        type,
-        src: dataUrl,
-        filename: f.name || (type + "-" + Date.now()),
-        meta: defaultMeta()
-      });
-    }
-    render();
-    persistDebounced();
-  }
-
-  function defaultMeta(){
-    return {
-      scene: "",
-      lens: "50mm",
-      shotType: "MS",
-      movements: [], // e.g., ["Pan","Tilt"]
-      transition: "Cut",
-      duration: DEFAULT_IMAGE_DURATION, // image only
-      dialogue: "",
-      description: ""
-    };
-  }
-
-  function fileToDataURL(file){
-    return new Promise((res, rej)=>{
-      const reader = new FileReader();
-      reader.onload = e => res(e.target.result);
-      reader.onerror = rej;
-      reader.readAsDataURL(file);
+  // ---------- UI Bindings ----------
+  function bindUI(){
+    // Menu sheet
+    menuBtn.addEventListener("click", ()=> sheet.classList.add("show"));
+    sheet.addEventListener("click", (e)=> {
+      if(e.target.classList.contains("sheet-backdrop")) sheet.classList.remove("show");
     });
+    closeSheet.addEventListener("click", ()=> sheet.classList.remove("show"));
+
+    // Actions
+    addSceneBtn.addEventListener("click", ()=> { addScene(); renderAll(); sheet.classList.remove("show"); persistDebounced(); });
+    addShotsBtn.addEventListener("click", ()=>{
+      state.pendingReplace = null; // bulk add to last scene
+      fileMulti.click();
+    });
+    importBtn.addEventListener("click", ()=> importFile.click());
+    exportBtn.addEventListener("click", exportJSON);
+    clearBtn.addEventListener("click", clearAll);
+
+    // Project name
+    projectName.addEventListener("input", ()=>{
+      state.projectName = projectName.value.trim();
+      persistDebounced();
+    });
+
+    // View toggle
+    viewToggle.addEventListener("click", ()=>{
+      const isComic = !comicView.classList.contains("hidden");
+      if(isComic){
+        comicView.classList.add("hidden"); boardView.classList.remove("hidden");
+        viewToggle.textContent = "Board ▾";
+      }else{
+        boardView.classList.add("hidden"); comicView.classList.remove("hidden");
+        viewToggle.textContent = "Comic ▾";
+      }
+    });
+
+    // Dropzone: tap-to-open + DnD
+    dropzone.addEventListener("click", ()=> { state.pendingReplace = null; fileMulti.click(); });
+    dropzone.addEventListener("keydown", (e)=> { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); dropzone.click(); }});
+    ["dragenter","dragover"].forEach(ev => dropzone.addEventListener(ev, (e)=> { e.preventDefault(); dropzone.classList.add("dragover"); }));
+    ["dragleave","drop"].forEach(ev => dropzone.addEventListener(ev, (e)=> { e.preventDefault(); dropzone.classList.remove("dragover"); }));
+    dropzone.addEventListener("drop", (e)=> { const dt=e.dataTransfer; if(dt?.files?.length) addFilesToScene(dt.files); });
+
+    // File inputs
+    fileMulti.addEventListener("change", (e)=> addFilesToScene(e.target.files));
+    fileSingle.addEventListener("change", (e)=> replaceSingle(e.target.files?.[0]||null));
+    importFile.addEventListener("change", (e)=> importJSON(e.target.files?.[0]||null));
   }
 
-  function addBlankSlide(){
-    slides.push({
+  // ---------- Scene/Shot operations ----------
+  function addScene(){
+    const idx = state.scenes.length + 1;
+    state.scenes.push({
       id: uid(),
-      type: "image",
-      src: blankCanvasDataUrl(),
-      filename: "blank.png",
-      meta: defaultMeta()
+      name: `Scene ${idx}`,
+      shots: []
     });
-    render();
-    persistDebounced();
   }
 
-  function blankCanvasDataUrl(){
-    const c = document.createElement("canvas");
-    c.width = 1600; c.height = 900;
-    const g = c.getContext("2d");
-    g.fillStyle = "#0d0f12"; g.fillRect(0,0,c.width,c.height);
-    g.fillStyle = "#2c3b57"; g.fillRect(0, c.height-160, c.width, 160);
-    g.fillStyle = "#cfeaff"; g.font = "48px system-ui";
-    g.fillText("Blank Slide", 50, c.height-90);
-    return c.toDataURL("image/png");
+  function addShotBox(sceneId){
+    const sc = getScene(sceneId);
+    if(!sc) return;
+    sc.shots.push(null); // empty slot
+  }
+
+  async function addFilesToScene(fileList){
+    const files = [...fileList].filter(f=> /^image\/|^video\//.test(f.type));
+    if(files.length===0) return;
+
+    const targetScene = state.pendingReplace ? getScene(state.pendingReplace.sceneId) : state.scenes[state.scenes.length-1];
+    if(!targetScene) return;
+
+    for(const f of files){
+      const dataUrl = await fileToDataURL(f);
+      const shot = makeShot({ type: f.type.startsWith("video") ? "video":"image", src:dataUrl, filename: f.name || "shot" });
+      // If there is an empty box waiting -> fill first
+      const emptyIdx = targetScene.shots.findIndex(s=> s===null);
+      if(emptyIdx>=0){
+        targetScene.shots[emptyIdx] = shot;
+      }else{
+        targetScene.shots.push(shot);
+      }
+    }
+    state.pendingReplace = null;
+    renderAll();
+    persistDebounced();
+    fileMulti.value = "";
+  }
+
+  async function replaceSingle(file){
+    if(!file || !state.pendingReplace){ fileSingle.value=""; return; }
+    const sc = getScene(state.pendingReplace.sceneId);
+    const idx = sc?.shots.findIndex(s=> s && s.id === state.pendingReplace.shotId);
+    if(sc && idx>=0){
+      const dataUrl = await fileToDataURL(file);
+      sc.shots[idx] = makeShot({ type: file.type.startsWith("video")?"video":"image", src:dataUrl, filename:file.name || "shot" });
+      renderAll();
+      persistDebounced();
+    }
+    state.pendingReplace = null;
+    fileSingle.value = "";
+  }
+
+  function deleteShot(sceneId, shotId){
+    const sc = getScene(sceneId); if(!sc) return;
+    const idx = sc.shots.findIndex(s=> s && s.id===shotId);
+    if(idx>=0) sc.shots.splice(idx,1);
+    renderAll(); persistDebounced();
   }
 
   // ---------- Rendering ----------
-  function render(){
-    container.innerHTML = "";
-    slides.forEach((slide, idx) => {
-      container.appendChild(renderCard(slide, idx));
+  function renderAll(){
+    // Comic view
+    scenesWrap.innerHTML = "";
+    state.scenes.forEach(scene => {
+      scenesWrap.appendChild(renderScene(scene));
     });
-    setStatus(`Slides: ${slides.length}`);
+
+    // Board view (simple flat list preview)
+    boardList.innerHTML = "";
+    state.scenes.forEach(scene => {
+      scene.shots.forEach(shot=>{
+        const li = document.createElement("li");
+        li.textContent = shot ? `${scene.name} — ${shot.filename}` : `${scene.name} — (empty)`;
+        boardList.appendChild(li);
+      });
+    });
+
+    projectName.value = state.projectName || "";
   }
 
-  function renderCard(slide, index){
-    const card = el("article", {class:"card", draggable:"true", "data-id":slide.id});
+  function renderScene(scene){
+    const wrap = div("scene");
 
-    // Thumb
-    const thumb = el("div", {class:"thumb"});
-    const badge = el("span", {class:"badge"}, slide.type.toUpperCase());
-    const dragIcon = el("div", {class:"drag-handle", title:"Drag to reorder"}, "⋮⋮");
-    thumb.appendChild(badge);
-    thumb.appendChild(dragIcon);
+    // Head
+    const head = div("scene-head");
+    const title = div("scene-title", scene.name);
+    title.contentEditable = "true";
+    title.spellcheck = false;
+    title.addEventListener("input", debounce(()=> { scene.name = (title.textContent||"").trim() || scene.name; persistDebounced(); }, 300));
+    head.appendChild(title);
 
-    if(slide.type === "image"){
-      const img = el("img", {src: slide.src, alt: slide.filename});
-      thumb.appendChild(img);
-    } else {
-      const v = el("video", {src: slide.src, muted:"", playsinline:"", loop:""});
+    const actions = div("scene-actions");
+    const addBoxBtn = btn("＋ Box", ()=> { addShotBox(scene.id); renderAll(); persistDebounced(); });
+    const addMediaBtn = btn("📥 Shots", ()=> { state.pendingReplace = null; fileMulti.click(); });
+    actions.append(addBoxBtn, addMediaBtn);
+    head.appendChild(actions);
+    wrap.appendChild(head);
+
+    // Strip
+    const strip = div("strip");
+    // Ensure at least one empty box
+    if(scene.shots.length === 0) scene.shots.push(null);
+
+    scene.shots.forEach((shot, idx)=>{
+      strip.appendChild(renderShot(scene, shot, idx));
+    });
+
+    // trailing + box always available
+    const plus = div("shot add-box");
+    plus.innerHTML = `<div class="thumb"><div class="plus">＋</div></div><div class="meta" style="text-align:center">Add shot</div>`;
+    plus.addEventListener("click", ()=> { addShotBox(scene.id); renderAll(); persistDebounced(); });
+    strip.appendChild(plus);
+
+    // Drag sort within scene
+    strip.addEventListener("dragover", (e)=> e.preventDefault());
+
+    wrap.appendChild(strip);
+    return wrap;
+  }
+
+  function renderShot(scene, shot, idx){
+    const card = div("shot");
+    card.draggable = true;
+
+    if(!shot){ // empty box
+      card.classList.add("empty");
+      card.innerHTML = `<div class="thumb"><div class="add-box"><div class="plus">＋</div><div>Tap to add</div></div></div><div class="meta">Empty</div>`;
+      card.addEventListener("click", ()=>{
+        // fill this empty slot with a single file
+        state.pendingReplace = null;
+        // When a file is chosen, we fill first empty (this one)
+        scene.shots[idx] = null; // ensure it stays empty
+        fileMulti.click();
+      });
+      return card;
+    }
+
+    // Filled shot
+    const t = div("thumb");
+    if(shot.type==="image"){
+      const img = new Image(); img.src = shot.src; img.alt = shot.filename;
+      t.appendChild(img);
+    }else{
+      const v = document.createElement("video");
+      v.src = shot.src; v.playsInline = true; v.controls = false; v.muted = true;
       v.addEventListener("mouseenter", ()=> v.play().catch(()=>{}));
       v.addEventListener("mouseleave", ()=> v.pause());
-      thumb.appendChild(v);
+      t.appendChild(v);
     }
+    const badge = div("badge", shot.type.toUpperCase());
+    t.appendChild(badge);
 
-    // Content / fields
-    const content = el("div", {class:"content"});
+    const meta = div("meta");
+    meta.innerHTML = `<strong>${esc(scene.name)}</strong><br><span>${esc(shot.meta.lens)} · ${esc(shot.meta.shotType)}</span>`;
 
-    const sceneRow = el("div", {class:"row"});
-    sceneRow.appendChild(field("Scene / Shot Title", el("input", {
-      type:"text", value: slide.meta.scene, placeholder:"E.g., Alley confrontation"
-    }, null, (ev)=>{ slide.meta.scene = ev.target.value; persistDebounced(); })));
-    content.appendChild(sceneRow);
+    // overlay info (tap to toggle)
+    const overlay = div("overlay-info");
+    overlay.textContent = shot.meta.dialogue || shot.meta.notes || `${shot.meta.lens} · ${shot.meta.shotType}`;
+    card.appendChild(overlay);
 
-    const row2 = el("div", {class:"row cols-3"});
-    row2.appendChild(selectField("Lens", ["18mm","24mm","35mm","50mm","85mm","100mm"], slide.meta.lens, (v)=>{ slide.meta.lens=v; persistDebounced(); }));
-    row2.appendChild(selectField("Shot Type", ["WS","MS","CU","ECU","POV","OTS","2S","Establishing"], slide.meta.shotType, (v)=>{ slide.meta.shotType=v; persistDebounced(); }));
-    row2.appendChild(selectField("Transition", ["Cut","Dissolve","Fade","Wipe","Match Cut","Whip Pan"], slide.meta.transition, (v)=>{ slide.meta.transition=v; persistDebounced(); }));
-    content.appendChild(row2);
+    card.appendChild(t);
+    card.appendChild(meta);
 
-    const movesRow = el("div", {class:"row"});
-    movesRow.appendChild(movementField(slide));
-    content.appendChild(movesRow);
-
-    const notesRow = el("div", {class:"row cols-2"});
-    notesRow.appendChild(field("Dialogue (subtitles)", el("textarea", {}, slide.meta.dialogue, (ev)=>{ slide.meta.dialogue=ev.target.value; persistDebounced(); })));
-    notesRow.appendChild(field("Description / Notes", el("textarea", {}, slide.meta.description, (ev)=>{ slide.meta.description=ev.target.value; persistDebounced(); })));
-    content.appendChild(notesRow);
-
-    if(slide.type === "image"){
-      const durRow = el("div", {class:"row cols-3"});
-      durRow.appendChild(field("Duration (sec in slideshow)", el("input", {type:"number", min:"1", max:"60", value: slide.meta.duration}, null,
-        (ev)=>{ slide.meta.duration = Math.max(1, Math.min(60, Number(ev.target.value)||DEFAULT_IMAGE_DURATION)); persistDebounced(); })));
-      durRow.appendChild(el("div")); durRow.appendChild(el("div"));
-      content.appendChild(durRow);
-    }
-
-    // Actions
-    const actions = el("div", {class:"actions"});
-    const left = el("div", {class:"left"});
-    const right = el("div", {class:"right"});
-
-    const upBtn = btn("↑", "Move up", () => moveSlide(index, -1));
-    const downBtn = btn("↓", "Move down", () => moveSlide(index, +1));
-    const delBtn = btn("Delete", "Remove slide", () => removeSlide(slide.id), "danger");
-
-    left.appendChild(upBtn);
-    left.appendChild(downBtn);
-    right.appendChild(delBtn);
-    actions.appendChild(left);
-    actions.appendChild(right);
-
-    card.appendChild(thumb);
-    card.appendChild(content);
-    card.appendChild(actions);
-
-    // Drag sorting
-    card.addEventListener("dragstart", (e)=>{
-      e.dataTransfer.setData("text/plain", slide.id);
-      card.classList.add("drag-ghost");
+    // Tap to toggle info
+    card.addEventListener("click", ()=>{
+      card.classList.toggle("show-info");
     });
-    card.addEventListener("dragend", ()=> card.classList.remove("drag-ghost"));
-    card.addEventListener("dragover", (e)=> e.preventDefault());
+
+    // Hold to replace / delete (mobile-friendly long press)
+    longPress(card, 450, ()=>{
+      const choice = mobilePrompt(["Replace","Delete","Cancel"]);
+      choice.then(opt=>{
+        if(opt==="Replace"){
+          state.pendingReplace = { sceneId: scene.id, shotId: shot.id };
+          fileSingle.click();
+        }else if(opt==="Delete"){
+          deleteShot(scene.id, shot.id);
+        }
+      });
+    });
+
+    // Drag within scene
+    card.addEventListener("dragstart", (e)=>{
+      e.dataTransfer.setData("text/plain", JSON.stringify({sceneId: scene.id, shotId: shot.id}));
+      setTimeout(()=> card.classList.add("dragging"), 0);
+    });
+    card.addEventListener("dragend", ()=> card.classList.remove("dragging"));
     card.addEventListener("drop", (e)=>{
       e.preventDefault();
-      const draggedId = e.dataTransfer.getData("text/plain");
-      const targetId = slide.id;
-      reorderByIds(draggedId, targetId);
+      const data = JSON.parse(e.dataTransfer.getData("text/plain")||"{}");
+      if(data.sceneId !== scene.id) return; // only within same scene
+      const arr = scene.shots.filter(Boolean);
+      const from = arr.findIndex(s=> s.id===data.shotId);
+      const to = arr.findIndex(s=> s.id===shot.id);
+      if(from<0 || to<0) return;
+      const [item] = arr.splice(from,1);
+      arr.splice(to,0,item);
+      // rebuild scene.shots keeping nulls at their spots
+      const newShots = [];
+      scene.shots.forEach(s=>{
+        if(s===null) newShots.push(null);
+        else newShots.push(arr.shift());
+      });
+      scene.shots = newShots;
+      renderAll(); persistDebounced();
     });
 
     return card;
   }
 
-  function moveSlide(index, delta){
-    const newIndex = index + delta;
-    if(newIndex < 0 || newIndex >= slides.length) return;
-    const [item] = slides.splice(index, 1);
-    slides.splice(newIndex, 0, item);
-    render();
-    persistDebounced();
-  }
+  // ---------- Board list (simple) ----------
+  // (Already rendered from renderAll — flat text list for quick audit)
 
-  function removeSlide(id){
-    slides = slides.filter(s => s.id !== id);
-    render();
-    persistDebounced();
-  }
-
-  function reorderByIds(dragId, dropId){
-    if(dragId === dropId) return;
-    const from = slides.findIndex(s=>s.id===dragId);
-    const to = slides.findIndex(s=>s.id===dropId);
-    const [item] = slides.splice(from,1);
-    slides.splice(to,0,item);
-    render();
-    persistDebounced();
-  }
-
-  // ---------- Field builders ----------
-  function el(tag, attrs={}, text=null, onInput){
-    const node = document.createElement(tag);
-    for(const [k,v] of Object.entries(attrs||{})){
-      if(v===null || v===undefined) continue;
-      node.setAttribute(k, v);
-    }
-    if(text!==null && text!==undefined) node.textContent = text;
-    if(onInput) node.addEventListener("input", onInput);
-    return node;
-  }
-
-  function btn(label, title, onClick, style){
-    const b = el("button", {class: `btn${style?(" "+style):""}`, title}, label);
-    b.addEventListener("click", onClick);
-    return b;
-  }
-
-  function field(labelText, inputEl){
-    const w = el("label", {class:"field"});
-    const span = el("span", {}, labelText);
-    w.appendChild(span);
-    w.appendChild(inputEl);
-    return w;
-  }
-
-  function selectField(labelText, opts, value, onChange){
-    const select = el("select");
-    opts.forEach(o=>{
-      const opt = el("option", {value:o}, o);
-      if(o===value) opt.selected = true;
-      select.appendChild(opt);
-    });
-    select.addEventListener("change", (e)=> onChange(e.target.value));
-    return field(labelText, select);
-  }
-
-  function movementField(slide){
-    const wrap = el("div");
-    wrap.appendChild(el("div", {class:"tags-label", style:"margin-bottom:6px;color:var(--text-dim);font-size:12px"}, "Camera Movement"));
-    const movements = ["Pan","Tilt","Zoom","Dolly","Truck","Pedestal","Handheld","Static"];
-    const row = el("div", {class:"tags"});
-    movements.forEach(m=>{
-      const chip = el("button", {class:"tag", type:"button", "aria-pressed": slide.meta.movements.includes(m)?"true":"false"}, m);
-      chip.addEventListener("click", ()=>{
-        const list = slide.meta.movements;
-        const i = list.indexOf(m);
-        (i>=0) ? list.splice(i,1) : list.push(m);
-        chip.setAttribute("aria-pressed", String(i<0));
-        persistDebounced();
-      });
-      row.appendChild(chip);
-    });
-    wrap.appendChild(row);
-    return field("", wrap);
-  }
-
-  // ---------- Presentation ----------
-  function openPlayer(startIdx=0){
-    if(slides.length===0) return;
-    current = Math.max(0, Math.min(startIdx, slides.length-1));
-    player.classList.add("open");
-    player.setAttribute("aria-hidden","false");
-    renderPlayer();
-  }
-
-  function closePlayerView(){
-    stopAuto();
-    player.classList.remove("open");
-    player.setAttribute("aria-hidden","true");
-    stageMedia.innerHTML = "";
-  }
-
-  function renderPlayer(){
-    stopAuto();
-    stageMedia.innerHTML = "";
-    const s = slides[current];
-
-    let mediaEl;
-    if(s.type==="image"){
-      mediaEl = el("img", {src:s.src, alt:s.filename});
-      stageMedia.appendChild(mediaEl);
-      if(autoAdvance) {
-        autoTimer = setTimeout(()=> next(), (Number(s.meta.duration)||DEFAULT_IMAGE_DURATION)*1000);
-      }
-    } else {
-      mediaEl = el("video", {src:s.src, controls:"", playsinline:""});
-      // Try autoplay after user gesture (clicking Present opens it)
-      mediaEl.addEventListener("loadedmetadata", ()=>{
-        if(autoAdvance){
-          mediaEl.addEventListener("ended", ()=> next());
-        }
-        mediaEl.play().catch(()=>{/* user can press play */});
-      });
-      stageMedia.appendChild(mediaEl);
-    }
-
-    // Overlays
-    ovTL.textContent = s.meta.scene ? s.meta.scene : "Untitled Scene";
-    ovTR.innerHTML = `${escapeHtml(s.meta.lens)} · ${escapeHtml(s.meta.shotType)}<br>${escapeHtml(s.meta.movements.join(" + ")||"")}`;
-    ovB.textContent = s.meta.dialogue || s.meta.description || "";
-
-    setStatus(`Presenting ${current+1} / ${slides.length}`);
-  }
-
-  function prev(){ current = (current-1+slides.length)%slides.length; renderPlayer(); }
-  function next(){ current = (current+1)%slides.length; renderPlayer(); }
-
-  function toggleAuto(){
-    autoAdvance = !autoAdvance;
-    autoBtn.classList.toggle("active", autoAdvance);
-    renderPlayer(); // re-enter with timer or event hookup
-  }
-  function stopAuto(){ autoAdvance=false; clearTimeout(autoTimer); autoTimer=null; autoBtn.classList.remove("active"); }
-
-  // ---------- JSON I/O ----------
-  function exportJSON(){
-    const payload = {
-      schema: "storyboard_studio_v1",
-      exportedAt: Date.now(),
-      slides
+  // ---------- Persistence ----------
+  function persist(){
+    const light = {
+      projectName: state.projectName,
+      scenes: state.scenes
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+    localStorage.setItem(state.autosaveKey, JSON.stringify(light));
+  }
+  const persistDebounced = debounce(persist, 350);
+
+  function restore(){
+    try{
+      const raw = localStorage.getItem(state.autosaveKey);
+      if(!raw) return;
+      const data = JSON.parse(raw);
+      state.projectName = data.projectName || "";
+      state.scenes = Array.isArray(data.scenes) ? data.scenes : [];
+    }catch{}
+  }
+
+  // ---------- Import/Export ----------
+  function exportJSON(){
+    const blob = new Blob([JSON.stringify({
+      schema:"storyboard_comic_v1",
+      exportedAt: new Date().toISOString(),
+      projectName: state.projectName || "Untitled",
+      scenes: state.scenes
+    }, null, 2)], {type:"application/json"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "storyboard.json";
+    a.download = (sanitize(state.projectName)||"storyboard") + ".json";
     a.click();
     URL.revokeObjectURL(a.href);
-    setStatus("Exported JSON. Note: embedded media can make files large.");
   }
 
-  function importJSONFile(file){
-    const reader = new FileReader();
-    reader.onload = e => {
+  function importJSON(file){
+    if(!file) return;
+    file.text().then(txt=>{
       try{
-        const data = JSON.parse(e.target.result);
-        if(!data || !Array.isArray(data.slides)) throw new Error("Invalid format");
-        slides = data.slides;
-        render();
-        persistDebounced();
-        setStatus(`Imported ${slides.length} slides from JSON.`);
+        const data = JSON.parse(txt);
+        if(!Array.isArray(data.scenes)) throw new Error("Invalid JSON");
+        state.projectName = data.projectName || "Imported";
+        state.scenes = data.scenes;
+        renderAll(); persist();
       }catch(err){
-        setStatus("⚠ Import failed: " + err.message);
+        alert("Import failed: " + err.message);
       }
-    };
-    reader.readAsText(file);
+    });
+    importFile.value = "";
   }
 
-  // ---------- Theme ----------
-  function applyThemeFromToggle(){
-    document.body.classList.toggle("light", themeToggle.checked);
-  }
-
-  // ---------- Events ----------
-  fileInput.addEventListener("change", (e)=> handleFiles(e.target.files));
-  addBlankBtn.addEventListener("click", addBlankSlide);
-  exportJsonBtn.addEventListener("click", exportJSON);
-  importJson.addEventListener("change", (e)=> {
-    const f = e.target.files?.[0];
-    if(f) importJSONFile(f);
-    e.target.value = "";
-  });
-  printBtn.addEventListener("click", ()=> window.print());
-  presentBtn.addEventListener("click", ()=> openPlayer(0));
-  clearBtn.addEventListener("click", ()=>{
-    if(confirm("Clear all slides and local save?")) {
-      slides = []; render(); persist();
+  function clearAll(){
+    if(confirm("Clear all scenes and local save?")){
+      state.projectName = "";
+      state.scenes = [];
+      addScene();
+      renderAll(); persist();
     }
-  });
-
-  // Dropzone
-  ;["dragenter","dragover"].forEach(ev=>{
-    dropzone.addEventListener(ev, e=> { e.preventDefault(); dropzone.classList.add("dragover"); });
-  });
-  ;["dragleave","drop"].forEach(ev=>{
-    dropzone.addEventListener(ev, e=> { e.preventDefault(); dropzone.classList.remove("dragover"); });
-  });
-  dropzone.addEventListener("drop", (e)=>{
-    const dt = e.dataTransfer;
-    if(dt?.files?.length) handleFiles(dt.files);
-  });
-
-  // Player controls
-  prevBtn.addEventListener("click", prev);
-  nextBtn.addEventListener("click", next);
-  autoBtn.addEventListener("click", toggleAuto);
-  fsBtn.addEventListener("click", ()=>{
-    if(!document.fullscreenElement){ player.requestFullscreen?.(); }
-    else{ document.exitFullscreen?.(); }
-  });
-  closePlayer.addEventListener("click", closePlayerView);
-
-  // Keyboard shortcuts
-  document.addEventListener("keydown", (e)=>{
-    if(!player.classList.contains("open")) return;
-    if(e.key==="ArrowRight") next();
-    if(e.key==="ArrowLeft") prev();
-    if(e.key===" "){ // play/pause video if present
-      e.preventDefault();
-      const v = stageMedia.querySelector("video");
-      if(v){
-        if(v.paused) v.play().catch(()=>{}); else v.pause();
-      }else{
-        toggleAuto();
-      }
-    }
-    if(e.key.toLowerCase()==="f"){ fsBtn.click(); }
-    if(e.key==="Escape"){ closePlayerView(); }
-  });
-
-  // Theme toggle
-  themeToggle.addEventListener("change", applyThemeFromToggle);
-  // Persist theme choice
-  const themeSaved = localStorage.getItem("storyboard_theme") || "dark";
-  themeToggle.checked = (themeSaved==="light");
-  applyThemeFromToggle();
-  themeToggle.addEventListener("change", ()=>{
-    localStorage.setItem("storyboard_theme", themeToggle.checked?"light":"dark");
-  });
-
-  // ---------- Init ----------
-  restore();
-  if(slides.length===0){
-    // (Optional) seed example blank
-    // addBlankSlide();
   }
 
   // ---------- Helpers ----------
-  function escapeHtml(s){
-    return String(s||"").replace(/[&<>"']/g, ch => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-    }[ch]));
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function sanitize(s){ return String(s||"").replace(/[^\w\-]+/g,'_').slice(0,60); }
+  function esc(s){ return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
+
+  function fileToDataURL(file){
+    return new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  function div(cls, txt){ const d=document.createElement("div"); d.className=cls; if(txt!=null) d.textContent=txt; return d; }
+  function btn(label, onClick){ const b=document.createElement("button"); b.className="small-btn"; b.textContent=label; b.addEventListener("click", onClick); return b; }
+  function debounce(fn, ms=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+  // Mobile long press helper
+  function longPress(el, ms, cb){
+    let t=null;
+    el.addEventListener("touchstart", ()=> { t=setTimeout(cb, ms); }, {passive:true});
+    el.addEventListener("touchend", ()=> { clearTimeout(t); }, {passive:true});
+    el.addEventListener("touchmove", ()=> { clearTimeout(t); }, {passive:true});
+    el.addEventListener("mousedown", ()=> { t=setTimeout(cb, ms); });
+    el.addEventListener("mouseup", ()=> { clearTimeout(t); });
+    el.addEventListener("mouseleave", ()=> { clearTimeout(t); });
+  }
+
+  // Simple mobile action picker (prompt-like)
+  function mobilePrompt(options){
+    return new Promise(resolve=>{
+      // very lightweight overlay
+      const overlay = document.createElement("div");
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);display:grid;place-items:end center;z-index:30;";
+      const sheet = document.createElement("div");
+      sheet.style.cssText = "width:100%;max-width:600px;background:#151a22;border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid #2a3243;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:8px;";
+      options.forEach(opt=>{
+        const b = document.createElement("button");
+        b.textContent = opt;
+        b.style.cssText = "width:100%;padding:14px 16px;background:#1a2130;border:1px solid #2a3243;color:#e8ecf3;border-radius:12px;margin:6px 8px;font-size:16px";
+        if(opt==="Delete") b.style.background="#3b2326";
+        if(opt==="Cancel") b.style.background="#0f1420";
+        b.onclick = ()=> { document.body.removeChild(overlay); resolve(opt); };
+        sheet.appendChild(b);
+      });
+      overlay.onclick = (e)=>{ if(e.target===overlay){ document.body.removeChild(overlay); resolve("Cancel"); } };
+      overlay.appendChild(sheet);
+      document.body.appendChild(overlay);
+    });
   }
 })();
