@@ -129,7 +129,6 @@
         <span id="recStatus" class="muted">No voice note</span>
       </div>
 
-      <!-- Replace / Delete -->
       <div class="audio-bar" style="justify-content:flex-start;gap:8px;margin-top:8px">
         <button id="edReplace" class="small-btn">↻ Replace media</button>
         <button id="edDelete" class="small-btn danger">🗑 Delete shot</button>
@@ -161,7 +160,13 @@
       <div class="controls-right">
         <button id="fsBtn" class="icon-btn" title="Fullscreen">⛶</button>
       </div>
+
+      <!-- Playback timeline (shown in auto movie mode) -->
+      <div id="timeline" aria-label="Playback timeline">
+        <div id="tlFill"></div>
+      </div>
     </div>
+
     <div class="stage">
       <div class="stage-media"></div>
       <div class="overlay top-left" id="ovTopLeft"></div>
