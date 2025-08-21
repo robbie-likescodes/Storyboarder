@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Storyboard Comic View</title>
+  <title>Storyboard</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -14,14 +14,13 @@
       <span class="logo">🎬</span>
       <span class="title">Storyboard</span>
     </div>
-
     <div class="top-actions">
-      <button id="presentBtn" class="seg" aria-label="Present">Present ▶</button>
-      <button id="viewToggle" class="seg" aria-label="Toggle view">Comic ▾</button>
+      <button id="presentBtn" class="seg">Present ▶</button>
+      <button id="viewToggle" class="seg">Comic ▾</button>
     </div>
   </header>
 
-  <!-- Action sheet (mobile-friendly) -->
+  <!-- Action sheet -->
   <div id="sheet" class="sheet" aria-hidden="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" role="dialog" aria-label="Actions">
@@ -30,8 +29,9 @@
       <div class="sheet-grid">
         <button id="addSceneBtn" class="sheet-btn">➕ Add Scene</button>
         <button id="addShotsBtn" class="sheet-btn">📥 Add Shots</button>
-        <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
+        <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (WebM)</button>
         <button id="exportBtn" class="sheet-btn">⤵ Export JSON</button>
+        <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
         <button id="clearBtn" class="sheet-btn danger">🗑 Clear Project</button>
       </div>
       <div class="row">
@@ -46,16 +46,16 @@
 
   <!-- Views -->
   <main id="main">
-    <!-- Comic Strip View -->
+    <!-- Comic View -->
     <section id="comicView" class="comic">
       <div class="comic-head">
-        <p class="hint">Tap an empty box to add a shot. Tap a shot to toggle info. Drag to reorder within a scene.</p>
+        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit or toggle info. Drag to reorder within a scene.</p>
       </div>
       <div id="scenes" class="scenes"></div>
       <div class="spacer-80"></div>
     </section>
 
-    <!-- Board View — full-size vertical gallery -->
+    <!-- Board View (full-size vertical gallery) -->
     <section id="boardView" class="board hidden">
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Add media">
         <div class="dz-inner">
@@ -63,10 +63,70 @@
           <small>…or tap here to pick from camera roll</small>
         </div>
       </div>
-
       <div id="gallery" class="gallery"></div>
     </section>
   </main>
+
+  <!-- Shot Editor Sheet -->
+  <div id="editor" class="sheet" aria-hidden="true">
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-body" role="dialog" aria-label="Edit shot">
+      <div class="sheet-grabber"></div>
+      <h2 id="editorTitle">Edit Shot</h2>
+
+      <div class="row cols-3">
+        <label class="field"><span>Lens</span>
+          <select id="edLens">
+            <option>18mm</option><option>24mm</option><option>35mm</option>
+            <option selected>50mm</option><option>85mm</option><option>100mm</option>
+          </select>
+        </label>
+        <label class="field"><span>Shot Type</span>
+          <select id="edShotType">
+            <option>WS</option><option selected>MS</option><option>CU</option><option>ECU</option>
+            <option>POV</option><option>OTS</option><option>2S</option><option>Establishing</option>
+          </select>
+        </label>
+        <label class="field"><span>Transition (out)</span>
+          <select id="edTransition">
+            <option>Cut</option><option>Dissolve</option><option>Fade</option>
+            <option>Wipe</option><option>Match Cut</option><option>Whip Pan</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <div class="tags-label">Movements</div>
+        <div id="edMoves" class="tags"></div>
+      </div>
+
+      <label class="field"><span>Dialogue / Subtitle</span>
+        <textarea id="edDialogue" rows="2" placeholder="“He stares into the soup…”"></textarea>
+      </label>
+      <label class="field"><span>Description / Notes</span>
+        <textarea id="edNotes" rows="2" placeholder="Lighting, blocking, extras…"></textarea>
+      </label>
+
+      <div class="audio-bar">
+        <button id="recBtn" class="small-btn">🎙 Record</button>
+        <button id="playNoteBtn" class="small-btn" disabled>▶ Play Note</button>
+        <span id="recStatus" class="muted">No voice note</span>
+      </div>
+
+      <button id="closeEditor" class="close-btn">Done</button>
+    </div>
+  </div>
+
+  <!-- Transition picker (quick chip tap) -->
+  <div id="transPicker" class="sheet" aria-hidden="true">
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-body" role="dialog" aria-label="Transition">
+      <div class="sheet-grabber"></div>
+      <h2>Choose Transition</h2>
+      <div class="tags" id="transOptions"></div>
+      <button id="closeTrans" class="close-btn">Close</button>
+    </div>
+  </div>
 
   <!-- Presentation Modal -->
   <div id="player" class="player" aria-hidden="true">
