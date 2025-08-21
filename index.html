@@ -11,14 +11,14 @@
 <body>
   <!-- ===== Top bar ===== -->
   <header class="topbar">
-    <div style="display:flex; gap:8px; align-items:center">
-      <button id="homeBtn" class="icon-btn" aria-label="Projects">🏠</button>
-      <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
-    </div>
+    <button id="homeBtn" class="icon-btn" aria-label="Projects">🏠</button>
+    <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+
     <div class="brand">
       <span class="logo">🎬</span>
       <span class="title">Storyboard</span>
     </div>
+
     <div class="top-actions">
       <button id="presentBtn" class="seg">Present ▶</button>
       <button id="viewToggle" class="seg" aria-haspopup="true">Comic ▾</button>
@@ -35,8 +35,8 @@
       <div class="sheet-grid">
         <button id="addSceneBtn" class="sheet-btn">➕ Add Scene</button>
         <button id="addShotsBtn" class="sheet-btn">📥 Add Shots</button>
-        <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (MP4)</button>
         <button id="switchProjectBtn" class="sheet-btn">🏠 Switch Project</button>
+        <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (MP4)</button>
         <button id="exportBtn" class="sheet-btn">⤵ Export JSON</button>
         <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
         <button id="clearBtn" class="sheet-btn danger">🗑 Clear Project</button>
@@ -62,7 +62,7 @@
       <div class="spacer-80"></div>
     </section>
 
-    <!-- Board View (vertical gallery) -->
+    <!-- Board View -->
     <section id="boardView" class="board hidden" aria-label="Board view">
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Add media">
         <div class="dz-inner">
@@ -121,7 +121,7 @@
         <span id="recStatus" class="muted">No voice note</span>
       </div>
 
-      <!-- New replace/delete controls inside editor -->
+      <!-- Replace / Delete controls inside the editor -->
       <div class="audio-bar" style="justify-content:flex-start;gap:8px;margin-top:8px">
         <button id="edReplace" class="small-btn">↻ Replace media</button>
         <button id="edDelete" class="small-btn danger">🗑 Delete shot</button>
