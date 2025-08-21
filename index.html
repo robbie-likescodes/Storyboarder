@@ -11,7 +11,10 @@
 <body>
   <!-- ===== Top bar ===== -->
   <header class="topbar">
-    <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+    <div style="display:flex; gap:8px; align-items:center">
+      <button id="homeBtn" class="icon-btn" aria-label="Projects">🏠</button>
+      <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+    </div>
     <div class="brand">
       <span class="logo">🎬</span>
       <span class="title">Storyboard</span>
@@ -28,21 +31,21 @@
     <div class="sheet-body" role="dialog" aria-label="Actions">
       <div class="sheet-grabber"></div>
       <h2>Actions</h2>
+
       <div class="sheet-grid">
         <button id="addSceneBtn" class="sheet-btn">➕ Add Scene</button>
         <button id="addShotsBtn" class="sheet-btn">📥 Add Shots</button>
         <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (MP4)</button>
+        <button id="switchProjectBtn" class="sheet-btn">🏠 Switch Project</button>
         <button id="exportBtn" class="sheet-btn">⤵ Export JSON</button>
         <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
         <button id="clearBtn" class="sheet-btn danger">🗑 Clear Project</button>
       </div>
 
-      <div class="row">
-        <label class="field">
-          <span>Project name</span>
-          <input id="projectName" type="text" placeholder="Untitled project" />
-        </label>
-      </div>
+      <label class="field">
+        <span>Project name</span>
+        <input id="projectName" type="text" placeholder="Untitled project" />
+      </label>
 
       <button id="closeSheet" class="close-btn">Close</button>
     </div>
@@ -118,6 +121,12 @@
         <span id="recStatus" class="muted">No voice note</span>
       </div>
 
+      <!-- New replace/delete controls inside editor -->
+      <div class="audio-bar" style="justify-content:flex-start;gap:8px;margin-top:8px">
+        <button id="edReplace" class="small-btn">↻ Replace media</button>
+        <button id="edDelete" class="small-btn danger">🗑 Delete shot</button>
+      </div>
+
       <button id="closeEditor" class="close-btn">Done</button>
     </div>
   </div>
@@ -158,7 +167,7 @@
   <input id="fileSingle" type="file" accept="image/*,video/*" hidden />
   <input id="importFile" type="file" accept="application/json" hidden />
 
-  <!-- App JS (handles ffmpeg loader & project picker) -->
+  <!-- App JS -->
   <script src="app.js"></script>
 </body>
 </html>
