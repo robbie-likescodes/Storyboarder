@@ -14,10 +14,14 @@
       <span class="logo">🎬</span>
       <span class="title">Storyboard</span>
     </div>
-    <button id="viewToggle" class="seg" aria-label="Toggle view">Comic ▾</button>
+
+    <div class="top-actions">
+      <button id="presentBtn" class="seg" aria-label="Present">Present ▶</button>
+      <button id="viewToggle" class="seg" aria-label="Toggle view">Comic ▾</button>
+    </div>
   </header>
 
-  <!-- Action sheet menu (mobile-friendly) -->
+  <!-- Action sheet (mobile-friendly) -->
   <div id="sheet" class="sheet" aria-hidden="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" role="dialog" aria-label="Actions">
@@ -40,18 +44,18 @@
     </div>
   </div>
 
-  <!-- View switcher -->
+  <!-- Views -->
   <main id="main">
     <!-- Comic Strip View -->
     <section id="comicView" class="comic">
       <div class="comic-head">
-        <p class="hint">Tap any empty box to add a shot. Tap a shot to toggle info. Drag to reorder within a scene.</p>
+        <p class="hint">Tap an empty box to add a shot. Tap a shot to toggle info. Drag to reorder within a scene.</p>
       </div>
       <div id="scenes" class="scenes"></div>
       <div class="spacer-80"></div>
     </section>
 
-    <!-- Classic Board View (optional quick add) -->
+    <!-- Board View — full-size vertical gallery -->
     <section id="boardView" class="board hidden">
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Add media">
         <div class="dz-inner">
@@ -59,9 +63,30 @@
           <small>…or tap here to pick from camera roll</small>
         </div>
       </div>
-      <ul id="boardList" class="board-list" aria-live="polite"></ul>
+
+      <div id="gallery" class="gallery"></div>
     </section>
   </main>
+
+  <!-- Presentation Modal -->
+  <div id="player" class="player" aria-hidden="true">
+    <div class="player-chrome">
+      <button id="closePlayer" class="icon-btn" title="Close">✕</button>
+      <div class="controls-left">
+        <button id="prevBtn" class="icon-btn" title="Prev">⟵</button>
+        <button id="nextBtn" class="icon-btn" title="Next">⟶</button>
+      </div>
+      <div class="controls-right">
+        <button id="fsBtn" class="icon-btn" title="Fullscreen">⛶</button>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-media"></div>
+      <div class="overlay top-left" id="ovTopLeft"></div>
+      <div class="overlay top-right" id="ovTopRight"></div>
+      <div class="overlay bottom" id="ovBottom"></div>
+    </div>
+  </div>
 
   <!-- Hidden file inputs -->
   <input id="fileMulti" type="file" accept="image/*,video/*" multiple hidden />
