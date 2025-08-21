@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Storyboard Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header">
+  <div class="brand">
+    <div class="logo">🎬</div>
+    <div>
+      <h1>Storyboard Studio</h1>
+      <p class="tagline">Plan shots, annotate, present.</p>
+    </div>
+  </div>
+
+  <nav class="toolbar">
+    <label class="btn primary">
+      <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden />
+      ➕ Add Media
+    </label>
+
+    <button id="addBlankBtn" class="btn">➕ Blank Slide</button>
+
+    <label class="btn">
+      <input id="importJson" type="file" accept="application/json" hidden />
+      ⤴ Import JSON
+    </label>
+    <button id="exportJsonBtn" class="btn">⤵ Export JSON</button>
+    <button id="printBtn" class="btn">🖨 Print / PDF</button>
+
+    <button id="presentBtn" class="btn accent">▶ Presentation</button>
+    <button id="clearBtn" class="btn danger outline">🗑 Clear All</button>
+  </nav>
+</header>
+
+<main>
+  <section id="dropzone" class="dropzone" aria-label="Drag and drop media here">
+    <div class="drop-hint">
+      <strong>Drop images or videos</strong>
+      <span>…or click “Add Media”. Videos will play with audio in presentation.</span>
+    </div>
+  </section>
+
+  <section id="slidesContainer" class="slides-grid" aria-live="polite"></section>
+</main>
+
+<footer class="app-footer">
+  <span id="statusMsg">Ready.</span>
+  <span class="spacer"></span>
+  <label class="switch">
+    <input id="themeToggle" type="checkbox" />
+    <span class="slider"></span>
+    <span class="label">Dark</span>
+  </label>
+</footer>
+
+<!-- Presentation Overlay -->
+<div id="player" class="player" aria-hidden="true">
+  <div class="player-chrome">
+    <button id="closePlayer" class="icon-btn" title="Close (Esc)">✕</button>
+    <div class="controls-left">
+      <button id="prevBtn" class="icon-btn" title="Previous (←)">⟵</button>
+      <button id="nextBtn" class="icon-btn" title="Next (→)">⟶</button>
+      <button id="autoBtn" class="icon-btn" title="Toggle Auto-Advance">⏯</button>
+    </div>
+    <div class="controls-right">
+      <button id="fsBtn" class="icon-btn" title="Fullscreen (F)">⛶</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="stage-media">
+      <!-- Swapped dynamically between <img> and <video> -->
+    </div>
+
+    <!-- Overlays -->
+    <div class="overlay top-left" id="ovTopLeft"></div>
+    <div class="overlay top-right" id="ovTopRight"></div>
+    <div class="overlay bottom" id="ovBottom"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
