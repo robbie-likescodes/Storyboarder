@@ -7,12 +7,17 @@
   <meta name="theme-color" content="#0f1115">
   <title>Storyboard</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- jsPDF for PDF export (fallback load also handled in JS) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
   <!-- ===== Top bar ===== -->
   <header class="topbar">
-    <button id="homeBtn" class="icon-btn" aria-label="Projects">🏠</button>
-    <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+    <div class="left">
+      <button id="homeBtn" class="icon-btn" aria-label="Projects">🏠</button>
+      <button id="undoBtn" class="icon-btn" aria-label="Undo" title="Undo (⌘/Ctrl+Z)">↶</button>
+      <button id="redoBtn" class="icon-btn" aria-label="Redo" title="Redo (⇧+⌘/Ctrl+Z)">↷</button>
+    </div>
 
     <div class="brand">
       <span class="logo">🎬</span>
@@ -30,6 +35,7 @@
       </div>
 
       <button id="viewToggle" class="seg" aria-haspopup="true">Comic ▾</button>
+      <button id="menuBtn" class="icon-btn" aria-label="Actions">☰</button>
     </div>
   </header>
 
@@ -45,6 +51,7 @@
         <button id="addShotsBtn" class="sheet-btn">📥 Add Shots</button>
         <button id="switchProjectBtn" class="sheet-btn">🏠 Switch Project</button>
         <button id="renderFilmBtn" class="sheet-btn">⏺ Render Film (MP4)</button>
+        <button id="exportPdfBtn" class="sheet-btn">🧾 Export PDF</button>
         <button id="exportBtn" class="sheet-btn">⤵ Export JSON</button>
         <button id="importBtn" class="sheet-btn">⤴ Import JSON</button>
         <button id="clearBtn" class="sheet-btn danger">🗑 Clear Project</button>
@@ -55,6 +62,23 @@
         <input id="projectName" type="text" placeholder="Untitled project" />
       </label>
 
+      <!-- Background Music controls -->
+      <h3 class="subhead">Background music</h3>
+      <div class="row cols-3">
+        <label class="field">
+          <span>Audio file</span>
+          <input id="bgmFile" type="file" accept="audio/*" />
+        </label>
+        <label class="field">
+          <span>Music volume</span>
+          <input id="bgmVol" type="range" min="0" max="1" step="0.05" value="0.8" />
+        </label>
+        <label class="field" style="align-items:center">
+          <span>Auto‑duck under voice/video</span>
+          <input id="bgmDuck" type="checkbox" checked />
+        </label>
+      </div>
+
       <button id="closeSheet" class="close-btn">Close</button>
     </div>
   </div>
@@ -64,7 +88,7 @@
     <!-- Comic View -->
     <section id="comicView" class="comic">
       <div class="comic-head">
-        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit. Long‑press for replace/duplicate/delete.</p>
+        <p class="hint">Tap an empty box to add a shot. Tap a shot to edit. Long‑press for replace/duplicate/delete. Drag cards or use ＋ slots to reorder/insert.</p>
       </div>
       <div id="scenes" class="scenes"></div>
       <div class="spacer-80"></div>
@@ -123,7 +147,7 @@
         <textarea id="edNotes" rows="2" placeholder="Lighting, blocking, extras…"></textarea>
       </label>
 
-      <!-- NEW: Still duration control -->
+      <!-- Still duration control -->
       <div class="row cols-3">
         <label class="field">
           <span>Still duration (sec)</span>
@@ -140,6 +164,7 @@
       <div class="audio-bar">
         <button id="recBtn" class="small-btn">🎙 Record</button>
         <button id="playNoteBtn" class="small-btn" disabled>▶ Play Note</button>
+        <button id="delNoteBtn" class="small-btn danger">🗑 Delete voice note</button>
         <span id="recStatus" class="muted">No voice note</span>
       </div>
 
@@ -195,6 +220,6 @@
   <input id="importFile" type="file" accept="application/json" hidden />
 
   <!-- App JS -->
-  <script src="app.js?v=build8" defer></script>
+  <script src="app.js?v=build10" defer></script>
 </body>
 </html>
