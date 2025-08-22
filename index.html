@@ -123,6 +123,20 @@
         <textarea id="edNotes" rows="2" placeholder="Lighting, blocking, extras…"></textarea>
       </label>
 
+      <!-- NEW: Still duration control -->
+      <div class="row cols-3">
+        <label class="field">
+          <span>Still duration (sec)</span>
+          <input id="edStillDur" type="range" min="1" max="30" step="1" value="7" />
+          <div class="muted" id="edStillDurLabel">Auto (≥ 7s or voice‑note length)</div>
+        </label>
+
+        <label class="field">
+          <span>&nbsp;</span>
+          <button id="edStillReset" class="small-btn" type="button">Use auto duration</button>
+        </label>
+      </div>
+
       <div class="audio-bar">
         <button id="recBtn" class="small-btn">🎙 Record</button>
         <button id="playNoteBtn" class="small-btn" disabled>▶ Play Note</button>
@@ -181,6 +195,6 @@
   <input id="importFile" type="file" accept="application/json" hidden />
 
   <!-- App JS -->
-  <script src="app.js"></script>
+  <script src="app.js?v=build8" defer></script>
 </body>
 </html>
