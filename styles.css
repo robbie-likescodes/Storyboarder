@@ -90,12 +90,22 @@ body.sheet-open{overflow:hidden}
   padding:10px 12px; border-radius:10px; border:1px solid var(--border);
   background:#0f1420; color:var(--text)
 }
+.field input[type="range"]{
+  padding:0; height:32px; cursor:pointer;
+  background:transparent; border:none;
+}
+.field input[type="range"]::-webkit-slider-runnable-track{ height:5px; background:#2a3243; border-radius:999px }
+.field input[type="range"]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%; background:#87b4ff; margin-top:-6.5px }
+.field input[type="range"]::-moz-range-track{ height:5px; background:#2a3243; border-radius:999px }
+.field input[type="range"]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; background:#87b4ff; border:none }
+
 .tags{display:flex; flex-wrap:wrap; gap:8px}
 .tag{
   background:#0d1a24; border:1px solid #25394c; color:#cfeaff;
   padding:6px 10px; border-radius:999px; font-size:12px; cursor:pointer; user-select:none
 }
 .tag.active{background:#18314a; border-color:#2d4f75}
+.tags-label{margin:0 0 -2px 2px}
 .audio-bar{display:flex; align-items:center; gap:10px; margin:6px 0}
 
 /* =============== COMIC VIEW =============== */
