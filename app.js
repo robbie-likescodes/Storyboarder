@@ -1,15 +1,7 @@
-/* Storyboard App — full JS
-   Features:
-   - Multi‑project (IndexedDB) + scrollable Project Picker
-   - Comic / Board views kept in sync
-   - Shot editor (lens, type, movements, transition, dialogue, notes)
-   - Replace / Duplicate / Delete shots (Comic long‑press + Editor buttons)
-   - Voice notes via MediaRecorder (per shot)
-   - Presentation player (manual): Prev/Next/Fullscreen/Exit
-   - Play movie (auto): fullscreen, hidden arrows, timeline, videos fill screen;
-     images show for 7s or voice‑note duration (whichever is longer)
-   - Export MP4 with audio mix (ffmpeg.wasm) + progress UI; WebM fallback recorder
-   - iPhone-friendly (playsinline, fullscreen fallbacks, safe-area spacing)
+/* Storyboard App — full JS (build8)
+   New in this build:
+   - Auto movie plays each image's voice note using Web Audio (no "first-note only" bug)
+   - Per‑image custom still duration (meta.stillDuration), default = max(7s, voice note)
 */
 
 (() => {
@@ -18,7 +10,7 @@ const $  = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => [...r.querySelectorAll(s)];
 const on = (el, ev, fn, opts) => el && el.addEventListener(ev, fn, opts);
 const uid = (p="p_") => p + Math.random().toString(36).slice(2,10);
-const esc = s => String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+const esc = s => String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#39;" }[m]));
 const sanitize = s => String(s||"").replace(/[^\w\-]+/g,"_").slice(0,60);
 const debounce = (fn, ms=350)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
 const sleep = ms => new Promise(r=>setTimeout(r, ms));
@@ -149,6 +141,11 @@ const recStatus      = $("#recStatus");
 const edReplace      = $("#edReplace");
 const edDelete       = $("#edDelete");
 
+/* NEW: still duration inputs (optional in HTML) */
+const edStillDur       = $("#edStillDur");
+const edStillDurLabel  = $("#edStillDurLabel");
+const edStillReset     = $("#edStillReset");
+
 const transPicker    = $("#transPicker");
 const transOptions   = $("#transOptions");
 const closeTrans     = $("#closeTrans");
@@ -273,6 +270,22 @@ function bindUI(){
     closeSheet(editor);
     toast("Shot deleted");
   });
+
+  // NEW: Still duration controls (optional)
+  if(edStillDur && edStillDurLabel){
+    on(edStillDur,"input", ()=> edStillDurLabel.textContent = `${edStillDur.value}s (manual)`);
+    on(edStillDur,"change", saveEditor);
+  }
+  if(edStillReset){
+    on(edStillReset,"click", ()=>{
+      const shot = getShot(state.editRef?.sceneId, state.editRef?.shotId);
+      if(!shot) return;
+      delete shot.meta.stillDuration;
+      if(edStillDur) edStillDur.value = "7";
+      if(edStillDurLabel) edStillDurLabel.textContent = "Auto (≥ 7s or voice‑note length)";
+      persistDebounced();
+    });
+  }
 
   // Voice notes
   on(recBtn,"click",toggleRecord);
@@ -564,21 +577,50 @@ function openEditor(sceneId,shotId){
   state.editRef={sceneId,shotId};
   const shot=getShot(sceneId,shotId); if(!shot) return;
   editorTitle.textContent=`Edit • ${shot.filename}`;
-  edLens.value=shot.meta.lens||"50mm";
-  edShotType.value=shot.meta.shotType||"MS";
-  edTransition.value=shot.meta.transition||"Cut";
-  edDialogue.value=shot.meta.dialogue||"";
-  edNotes.value=shot.meta.notes||"";
-  [...edMoves.querySelectorAll(".tag")].forEach(b=> b.classList.toggle("active", !!shot.meta.movements?.includes(b.dataset.mov)));
-  if(shot.meta.voiceNote){ recStatus.textContent=`Voice note • ${formatTime(shot.meta.voiceNote.duration)}`; playNoteBtn.disabled=false; }
-  else { recStatus.textContent="No voice note"; playNoteBtn.disabled=true; }
+  if(edLens) edLens.value=shot.meta.lens||"50mm";
+  if(edShotType) edShotType.value=shot.meta.shotType||"MS";
+  if(edTransition) edTransition.value=shot.meta.transition||"Cut";
+  if(edDialogue) edDialogue.value=shot.meta.dialogue||"";
+  if(edNotes) edNotes.value=shot.meta.notes||"";
+  if(edMoves) [...edMoves.querySelectorAll(".tag")].forEach(b=> b.classList.toggle("active", !!shot.meta.movements?.includes(b.dataset.mov)));
+
+  // Populate still duration controls (optional)
+  const dur = Number(shot.meta.stillDuration);
+  if(edStillDur && edStillDurLabel){
+    if (Number.isFinite(dur)){
+      edStillDur.value = String(Math.max(1, Math.min(30, Math.round(dur))));
+      edStillDurLabel.textContent = `${edStillDur.value}s (manual)`;
+    } else {
+      edStillDur.value = "7";
+      edStillDurLabel.textContent = "Auto (≥ 7s or voice‑note length)";
+    }
+  }
+
+  if(recStatus) {
+    if(shot.meta.voiceNote){ recStatus.textContent=`Voice note • ${formatTime(shot.meta.voiceNote.duration)}`; if(playNoteBtn) playNoteBtn.disabled=false; }
+    else { recStatus.textContent="No voice note"; if(playNoteBtn) playNoteBtn.disabled=true; }
+  }
   openSheet(editor);
 }
 function saveEditor(){
   const shot=getShot(state.editRef?.sceneId, state.editRef?.shotId); if(!shot) return;
-  shot.meta.lens=edLens.value; shot.meta.shotType=edShotType.value; shot.meta.transition=edTransition.value;
-  shot.meta.dialogue=edDialogue.value; shot.meta.notes=edNotes.value;
-  shot.meta.movements=[...edMoves.querySelectorAll(".tag.active")].map(b=>b.dataset.mov);
+  if(edLens) shot.meta.lens=edLens.value;
+  if(edShotType) shot.meta.shotType=edShotType.value;
+  if(edTransition) shot.meta.transition=edTransition.value;
+  if(edDialogue) shot.meta.dialogue=edDialogue.value;
+  if(edNotes) shot.meta.notes=edNotes.value;
+  if(edMoves) shot.meta.movements=[...edMoves.querySelectorAll(".tag.active")].map(b=>b.dataset.mov);
+
+  // Manual still duration — only save when slider label says "(manual)"
+  if(edStillDur && edStillDurLabel){
+    if(edStillDurLabel.textContent.includes("(manual)")){
+      const manual = Number(edStillDur.value);
+      shot.meta.stillDuration = Math.max(1, Math.min(30, isFinite(manual) ? manual : 7));
+    }else{
+      delete shot.meta.stillDuration;
+    }
+  }
+
   persistDebounced(); renderAll();
 }
 let mediaRec=null, recChunks=[], recStart=0;
@@ -589,12 +631,13 @@ async function toggleRecord(){
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
     recChunks=[]; mediaRec=new MediaRecorder(stream);
     mediaRec.ondataavailable=e=>{ if(e.data.size) recChunks.push(e.data); };
-    mediaRec.onstart=()=>{ recStart=Date.now(); recStatus.textContent="Recording… tap to stop"; recBtn.textContent="⏹ Stop"; };
+    mediaRec.onstart=()=>{ recStart=Date.now(); if(recStatus) recStatus.textContent="Recording… tap to stop"; if(recBtn) recBtn.textContent="⏹ Stop"; };
     mediaRec.onstop=async ()=>{
       const blob=new Blob(recChunks,{type:mediaRec.mimeType||"audio/webm"});
       const dataUrl=await blobToDataURL(blob); const dur=(Date.now()-recStart)/1000;
       shot.meta.voiceNote={ dataUrl, duration:dur, mime:blob.type };
-      recStatus.textContent=`Saved • ${formatTime(dur)}`; playNoteBtn.disabled=false; recBtn.textContent="🎙 Record"; persistDebounced();
+      if(recStatus) recStatus.textContent=`Saved • ${formatTime(dur)}`; if(playNoteBtn) playNoteBtn.disabled=false; if(recBtn) recBtn.textContent="🎙 Record";
+      persistDebounced();
     };
     mediaRec.start();
   }catch(err){ alert("Mic access failed: "+err.message); }
@@ -609,7 +652,7 @@ function openPresentation(){
   state.flatIndex=flattenShots(); if(state.flatIndex.length===0) return;
   curIdx=0; player.classList.add("open"); player.classList.remove("auto");
   player.setAttribute("aria-hidden","false");
-  prevBtn.disabled=false; nextBtn.disabled=false;
+  prevBtn && (prevBtn.disabled=false); nextBtn && (nextBtn.disabled=false);
   if(tlFill) tlFill.style.width="0%";
   showAt(0);
 }
@@ -618,7 +661,7 @@ function closePresentation(){
   player.setAttribute("aria-hidden","true");
   stageMedia.innerHTML="";
   stopAutoPlay();
-  prevBtn.disabled=false; nextBtn.disabled=false;
+  prevBtn && (prevBtn.disabled=false); nextBtn && (nextBtn.disabled=false);
   if(tlFill) tlFill.style.width="0%";
 }
 function flattenShots(){ const arr=[]; state.scenes.forEach(s=> s.shots.filter(Boolean).forEach(sh=> arr.push({scene:s, shot:sh}))); return arr; }
@@ -639,11 +682,17 @@ function showAt(i){
 let autoTimer=null, autoAudio=null, autoAbort=false, tlInterval=null;
 let segStart=0, segDur=0, durations=[], totalDur=0, elapsedBeforeSeg=0;
 
+/* NEW: single Web Audio engine for image voice notes */
+let audioCtx = null;     // AudioContext for auto movie
+let voiceSource = null;  // current AudioBufferSourceNode
+
 function stopAutoPlay(){
   autoAbort=true;
   if(autoTimer){ clearTimeout(autoTimer); autoTimer=null; }
   if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
   if(tlInterval){ clearInterval(tlInterval); tlInterval=null; }
+  if(voiceSource){ try{ voiceSource.stop(); }catch{} voiceSource=null; }
+  if(audioCtx){ try{ audioCtx.close(); }catch{} audioCtx=null; }
 }
 function getVideoDuration(src){
   return new Promise(resolve=>{
@@ -655,7 +704,11 @@ function getVideoDuration(src){
 }
 async function computeDurations(seq){
   return Promise.all(seq.map(({shot})=>{
-    if(shot.type==="image") return Math.max(7, shot.meta.voiceNote?.duration||0);
+    if(shot.type==="image"){
+      const manual = Number(shot.meta.stillDuration);
+      const base   = Number.isFinite(manual) ? manual : 7;
+      return Math.max(base, shot.meta.voiceNote?.duration || 0);
+    }
     return getVideoDuration(shot.src);
   }));
 }
@@ -674,14 +727,18 @@ function startAutoPlay(){
   const seq=flattenShots(); if(seq.length===0){ toast("Add shots first"); return; }
   player.classList.add("open","auto");
   player.setAttribute("aria-hidden","false");
-  prevBtn.disabled=true; nextBtn.disabled=true;
+  prevBtn && (prevBtn.disabled=true); nextBtn && (nextBtn.disabled=true);
+
+  // Create/resume audio context from this user gesture
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume().catch(()=>{});
 
   (async ()=>{
     durations=await computeDurations(seq);
     totalDur=durations.reduce((a,b)=>a+b,0);
     elapsedBeforeSeg=0; tlFill && (tlFill.style.width="0%");
 
-    // try fullscreen; on iOS we may retry once video is present
+    // try fullscreen; on iOS retry after first video element exists
     goFullscreen(player);
 
     autoAbort=false; let i=0;
@@ -694,13 +751,27 @@ function startAutoPlay(){
       startTimelineWatcher();
 
       stageMedia.innerHTML=""; if(autoAudio){ try{ autoAudio.pause(); }catch{} autoAudio=null; }
+      if(voiceSource){ try{ voiceSource.stop(); }catch{} voiceSource=null; }
       ovTL.textContent=scene.name;
       ovTR.textContent=`${shot.meta.lens} · ${shot.meta.shotType} • ${shot.meta.transition||"Cut"}`;
       ovB.textContent=shot.meta.dialogue || shot.meta.notes || "";
 
       if(shot.type==="image"){
         const img=new Image(); img.src=shot.src; stageMedia.appendChild(img);
-        if(shot.meta.voiceNote?.dataUrl){ autoAudio=new Audio(shot.meta.voiceNote.dataUrl); autoAudio.play().catch(()=>{}); }
+
+        // Play this slide's voice note if present
+        if(shot.meta.voiceNote?.dataUrl && audioCtx){
+          try{
+            const ab = await fetch(shot.meta.voiceNote.dataUrl).then(r=>r.arrayBuffer());
+            const buf = await audioCtx.decodeAudioData(ab);
+            voiceSource = audioCtx.createBufferSource();
+            voiceSource.buffer = buf;
+            voiceSource.connect(audioCtx.destination);
+            voiceSource.start();
+            voiceSource.stop(audioCtx.currentTime + segDur + 0.05);
+          }catch(e){ /* ignore */ }
+        }
+
         autoTimer=setTimeout(()=>{ elapsedBeforeSeg += segDur; i++; playStep(); }, segDur*1000);
       }else{
         const v=document.createElement("video");
@@ -715,8 +786,8 @@ function startAutoPlay(){
         autoTimer=setTimeout(advance, segDur*1000);
       }
     };
-    const origClose=closePlayer.onclick;
-    closePlayer.onclick=()=>{ stopAutoPlay(); closePresentation(); closePlayer.onclick=origClose; };
+    const origClose=closePlayer?.onclick;
+    if(closePlayer) closePlayer.onclick=()=>{ stopAutoPlay(); closePresentation(); closePlayer.onclick=origClose; };
     playStep();
   })();
 }
@@ -754,7 +825,10 @@ async function exportFilmMP4(){
     idx++;
     if(shot.type==="image"){
       const imgName=`img_${idx}.jpg`; ffmpeg.FS('writeFile', imgName, dataURLtoUint8(shot.src));
-      const dur=Math.max(7, shot.meta.voiceNote?.duration || 0); const out=`part_${idx}.mp4`;
+      const manual = Number(shot.meta.stillDuration);
+      const base   = Number.isFinite(manual) ? manual : 7;
+      const dur    = Math.max(base, shot.meta.voiceNote?.duration || 0);
+      const out=`part_${idx}.mp4`;
       progressUpdate(`Image ${idx}: rendering ${dur.toFixed(1)}s`,0.05);
       await ffmpeg.run('-loop','1','-t',String(dur),'-i',imgName,'-vf',`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,'-r',String(fps),'-c:v','libx264','-pix_fmt','yuv420p','-profile:v','baseline','-an',out);
       parts.push(out);
@@ -804,13 +878,24 @@ async function exportFilmMP4(){
 
 async function buildFullAudioTrack(flat){
   const sr=48000; let total=0;
-  for(const {shot} of flat){ total += (shot.type==="image") ? Math.max(7, shot.meta.voiceNote?.duration||0) : 7; }
+  for(const {shot} of flat){
+    if(shot.type==="image"){
+      const manual=Number(shot.meta.stillDuration);
+      const base=Number.isFinite(manual)?manual:7;
+      total += Math.max(base, shot.meta.voiceNote?.duration||0);
+    }else{
+      total += 7;
+    }
+  }
   if(total<=0) return null;
   const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext; if(!Offline) return null;
   const ctx=new Offline(2, Math.ceil(total*sr), sr);
   let t=0;
   for(const {shot} of flat){
-    const dur=(shot.type==="image") ? Math.max(7, shot.meta.voiceNote?.duration||0) : 7;
+    const dur = (shot.type==="image")
+      ? Math.max(Number.isFinite(Number(shot.meta.stillDuration))?Number(shot.meta.stillDuration):7, shot.meta.voiceNote?.duration||0)
+      : 7;
+
     if(shot.type==="image" && shot.meta.voiceNote?.dataUrl){
       try{
         const ab=await fetch(shot.meta.voiceNote.dataUrl).then(r=>r.arrayBuffer());
@@ -884,7 +969,11 @@ async function exportFilmWebM(){
   for(const {scene,shot} of flat){
     idx++; progressUpdate(`Rendering ${idx}/${flat.length}`, idx/flat.length*0.95);
     if(shot.type==="image"){
-      const img=await loadImage(shot.src); const hold=Math.max(7, shot.meta.voiceNote?.duration||0); const frames=Math.max(1, Math.round(fps*hold));
+      const img=await loadImage(shot.src);
+      const manual = Number(shot.meta.stillDuration);
+      const base   = Number.isFinite(manual) ? manual : 7;
+      const hold   = Math.max(base, shot.meta.voiceNote?.duration||0);
+      const frames=Math.max(1, Math.round(fps*hold));
       for(let f=0; f<frames; f++){ drawCover(img); drawOverlays(scene,shot); await waitFrame(); }
     }else{
       const v=document.createElement("video"); v.src=shot.src; v.playsInline=true; await v.play().catch(()=>{}); const endAt=performance.now()+7000;
